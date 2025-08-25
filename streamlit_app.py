@@ -28,8 +28,6 @@ dataset](https://www.kaggle.com/datasets/petalme/seattle-weather-prediction-data
 ### 2015 Summary
 """
 
-cols = st.columns(2)
-
 df_2015 = full_df[full_df["date"].dt.year == 2015]
 df_2014 = full_df[full_df["date"].dt.year == 2014]
 
@@ -50,6 +48,8 @@ max_prec_2014 = df_2014["precipitation"].max()
 
 min_prec_2015 = df_2015["precipitation"].min()
 min_prec_2014 = df_2014["precipitation"].min()
+
+cols = st.columns(2)
 
 with cols[0].container(border=True):
     inner_cols = st.columns(2)
