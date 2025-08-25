@@ -2,13 +2,11 @@
 
 Just an example Streamlit dashboard exploring the classic Seattle Weather dataset.
 
-
 ## View it in one click
 
-[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](http://seattle-weather.streamlit.app/)
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](http://demo-seattle-weather.streamlit.app/)
 
 ## Try it on your machine
-
 
 1. Get the code:
 
