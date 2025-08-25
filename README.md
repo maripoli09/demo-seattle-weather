@@ -11,7 +11,7 @@ Just an example Streamlit dashboard exploring the classic Seattle Weather datase
 1. Get the code:
 
    ```sh
-   $ git clone https://github.com/streamlit/streamlit.git
+   $ git clone https://github.com/streamlit/demo-seattle-weather.git
    ```
 
 2. Start a virtual environment and get the dependencies (requires uv):
