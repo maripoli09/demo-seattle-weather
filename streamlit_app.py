@@ -19,7 +19,7 @@ st.set_page_config(
 # :blue[:material/partly_cloudy_day:] Seattle Weather
 
 Let's explore the [classic Seattle Weather
-dataset](https://www.kaggle.com/datasets/petalme/seattle-weather-prediction-dataset)!
+dataset](https://altair-viz.github.io/case_studies/exploring-weather.html)!
 """
 
 ""  # Add a little vertical space. Same as st.write("").
@@ -93,15 +93,15 @@ with cols[0].container(border=True):
     with inner_cols[0]:
         st.metric(
             "Max wind",
-            f"{max_wind_2015:0.1f}kt",
-            delta=f"{max_wind_2015 - max_wind_2014:0.1f}kt",
+            f"{max_wind_2015:0.1f}m/s",
+            delta=f"{max_wind_2015 - max_wind_2014:0.1f}m/s",
         )
 
     with inner_cols[1]:
         st.metric(
             "Min wind",
-            f"{min_wind_2015:0.1f}kt",
-            delta=f"{min_wind_2015 - min_wind_2014:0.1f}kt",
+            f"{min_wind_2015:0.1f}m/s",
+            delta=f"{min_wind_2015 - min_wind_2014:0.1f}m/s",
         )
 
 with cols[1].container(border=True, height="stretch"):
@@ -193,7 +193,7 @@ with cols[0].container(border=True, height="stretch"):
         .mark_line(size=1)
         .encode(
             alt.X("date", timeUnit="monthdate").title("date"),
-            alt.Y("avg_wind:Q").title("average wind past 2 weeks (kt)"),
+            alt.Y("avg_wind:Q").title("average wind past 2 weeks (m/s)"),
             alt.Color("date:N", timeUnit="year").title("year"),
         )
         .configure_legend(orient="bottom")
