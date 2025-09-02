@@ -16,17 +16,20 @@ st.set_page_config(
 
 
 """
-# :blue[:material/partly_cloudy_day:] Seattle Weather
+# Seattle Weather
 
 Let's explore the [classic Seattle Weather
 dataset](https://altair-viz.github.io/case_studies/exploring-weather.html)!
 """
 
 ""  # Add a little vertical space. Same as st.write("").
+""
 
 """
-### 2015 Summary
+## 2015 Summary
 """
+
+""
 
 df_2015 = full_df[full_df["date"].dt.year == 2015]
 df_2014 = full_df[full_df["date"].dt.year == 2014]
@@ -49,63 +52,63 @@ max_prec_2014 = df_2014["precipitation"].max()
 min_prec_2015 = df_2015["precipitation"].min()
 min_prec_2014 = df_2014["precipitation"].min()
 
-cols = st.columns(2)
 
-with cols[0].container(border=True):
-    inner_cols = st.columns(2)
+with st.container(horizontal=True, gap="medium"):
+    cols = st.columns(2, gap="medium", width=300)
 
-    with inner_cols[0]:
+    with cols[0]:
         st.metric(
             "Max tempearture",
             f"{max_temp_2015:0.1f}C",
             delta=f"{max_temp_2015 - max_temp_2014:0.1f}C",
+            width="content",
         )
 
-    with inner_cols[1]:
+    with cols[1]:
         st.metric(
             "Min tempearture",
             f"{min_temp_2015:0.1f}C",
             delta=f"{min_temp_2015 - min_temp_2014:0.1f}C",
+            width="content",
         )
 
-with cols[1].container(border=True):
-    inner_cols = st.columns(2)
+    cols = st.columns(2, gap="medium", width=300)
 
-    with inner_cols[0]:
+    with cols[0]:
         st.metric(
             "Max precipitation",
             f"{max_prec_2015:0.1f}C",
             delta=f"{max_prec_2015 - max_prec_2014:0.1f}C",
+            width="content",
         )
 
-    with inner_cols[1]:
+    with cols[1]:
         st.metric(
             "Min precipitation",
             f"{min_prec_2015:0.1f}C",
             delta=f"{min_prec_2015 - min_prec_2014:0.1f}C",
+            width="content",
         )
 
-cols = st.columns(2)
+    cols = st.columns(2, gap="medium", width=300)
 
-with cols[0].container(border=True):
-    inner_cols = st.columns(2)
-
-    with inner_cols[0]:
+    with cols[0]:
         st.metric(
             "Max wind",
             f"{max_wind_2015:0.1f}m/s",
             delta=f"{max_wind_2015 - max_wind_2014:0.1f}m/s",
+            width="content",
         )
 
-    with inner_cols[1]:
+    with cols[1]:
         st.metric(
             "Min wind",
             f"{min_wind_2015:0.1f}m/s",
             delta=f"{min_wind_2015 - min_wind_2014:0.1f}m/s",
+            width="content",
         )
 
-with cols[1].container(border=True, height="stretch"):
-    inner_cols = st.columns(2)
+    cols = st.columns(2, gap="medium", width=300)
 
     weather_icons = {
         "sun": "☀️",
@@ -115,30 +118,35 @@ with cols[1].container(border=True, height="stretch"):
         "drizzle": "🌧️",
     }
 
-    with inner_cols[0]:
+    with cols[0]:
+        weather_name = (
+            full_df["weather"].value_counts().head(1).reset_index()["weather"][0]
+        )
         st.metric(
             "Most common weather",
-            weather_icons[
-                full_df["weather"].value_counts().head(1).reset_index()["weather"][0]
-            ],
+            f"{weather_icons[weather_name]} {weather_name.upper()}",
         )
 
-    with inner_cols[1]:
+    with cols[1]:
+        weather_name = (
+            full_df["weather"].value_counts().tail(1).reset_index()["weather"][0]
+        )
         st.metric(
             "Least common weather",
-            weather_icons[
-                full_df["weather"].value_counts().tail(1).reset_index()["weather"][0]
-            ],
+            f"{weather_icons[weather_name]} {weather_name.upper()}",
         )
 
 ""
+""
 
 """
-### Details
+## Compare different years
 """
 
 YEARS = full_df["date"].dt.year.unique()
-selected_years = st.multiselect("Years to show", YEARS, default=YEARS)
+selected_years = st.pills(
+    "Years to compare", YEARS, default=YEARS, selection_mode="multi"
+)
 
 if not selected_years:
     st.warning("You must select at least 1 year.", icon=":material/warning:")
@@ -148,7 +156,7 @@ df = full_df[full_df["date"].dt.year.isin(selected_years)]
 cols = st.columns([3, 1])
 
 with cols[0].container(border=True, height="stretch"):
-    "##### Temperature"
+    "### Temperature"
 
     st.altair_chart(
         alt.Chart(df)
@@ -164,7 +172,7 @@ with cols[0].container(border=True, height="stretch"):
     )
 
 with cols[1].container(border=True, height="stretch"):
-    "##### Weather distribution"
+    "### Weather distribution"
 
     st.altair_chart(
         alt.Chart(df)
@@ -180,7 +188,7 @@ with cols[1].container(border=True, height="stretch"):
 cols = st.columns(2)
 
 with cols[0].container(border=True, height="stretch"):
-    "##### Wind"
+    "### Wind"
 
     st.altair_chart(
         alt.Chart(df)
@@ -200,7 +208,7 @@ with cols[0].container(border=True, height="stretch"):
     )
 
 with cols[1].container(border=True, height="stretch"):
-    "##### Precipitation"
+    "### Precipitation"
 
     st.altair_chart(
         alt.Chart(df)
@@ -216,7 +224,7 @@ with cols[1].container(border=True, height="stretch"):
 cols = st.columns(2)
 
 with cols[0].container(border=True, height="stretch"):
-    "##### Monthly weather breakdown"
+    "### Monthly weather breakdown"
     ""
 
     st.altair_chart(
@@ -231,6 +239,6 @@ with cols[0].container(border=True, height="stretch"):
     )
 
 with cols[1].container(border=True, height="stretch"):
-    "##### Raw data"
+    "### Raw data"
 
     st.dataframe(df)
