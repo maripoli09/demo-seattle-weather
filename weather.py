@@ -47,6 +47,7 @@ def future_weather(city="Lisboa"):
         # Returns the list of forecasts (usually every 3 hours)
         return response.json()["list"]
     
-    except requests.exceptions.RequestException:
+    except Exception as e:
+        st.error(f"Erro ao obter previsão: {e}")
         return None
     

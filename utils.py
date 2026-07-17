@@ -50,6 +50,29 @@ def make_prediction(model, scaler, historical_data, hour, day_of_week, month):
     return float(max(0, prediction[0]))
 
 
+def estimate_solar_production(num_panels, panel_wattage, clouds):
+    """
+    Estimate of solar production based in the infrastructure of the user and clouds.
+    """
+    if num_panels == 0:
+        return 0.0
+    
+    # Maximum installed power in kW
+    max_power_kw = (num_panels * panel_wattage) / 1000.0
+
+    # Cloud loss factor(simplified)
+    # If clouds=0%, fator=1.0. If clouds=100%, fator=0.2
+    cloud_factor = 1.0 - (0.8 * (clouds / 100.0))
+
+    # Ajusted by hour of the day (production just between 7h and 20h)
+    hour = datetime.now().hour
+    if 7 <= hour <= 20:
+        import math
+        time_factor = math.sin(math.pi * (hour - 7)/13)
+
+        return float(max_power_kw * cloud_factor * time_factor)
+        return 0.0
+    
 
 
 def generate_recommendation(predicted_consumption, predicted_production, current_price, cloud_coverage, t):

@@ -29,7 +29,11 @@ with st.sidebar:
     st.subheader("Tarifa")
     cycle = st.selectbox("Ciclo / Cycle", ["Simple", "Two-cycle", "Three-cycle"])
     model_type = st.selectbox("Modelo / Model", ["Fixed", "Variable"])
-
+    st.subheader("Número de Painéis Solares / Number of Solar Panels")
+    num_solar_panels = st.number_input("Número de Painéis Solares / Number of Solar Panels", min_value=0, value=0)
+    st.subheader("Potência de cada Painel / Power of each Panel (W)")
+    panel_wattage = st.number_input("Potência de cada Painel / Power of each Panel (W)", min_value=0, value=450)
+    st.divider()
 
 # ── Dados em tempo real ───────────────────────
 now = datetime.now()
