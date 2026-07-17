@@ -1,259 +1,109 @@
-# -*- coding: utf-8 -*-
-# Copyright 2024-2025 Streamlit Inc.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#    http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
-from datetime import datetime
 import streamlit as st
-import altair as alt
-import vega_datasets
+import pandas as pd
+from datetime import datetime
+import plotly.express as px
+from tariffs import electricity_price
+from weather import obtain_local_weather
+from utils import LANGUAGES, load_smart_models, make_prediction, generate_recommendation
+
+weather_data = obtain_local_weather 
+
+# Configurations of the page
+st.set_page_config(page_title="Smart Energy Advisor", layout="wide")
+
+@st.cache_resource
+def load_all():
+    return load_smart_models()
+
+model, scaler, historical_data = load_all()
+
+# ── Sidebar ──────────────────────────────────
+with st.sidebar:
+    st.title("Definições")
+    language = st.selectbox("Língua / Language", ["PT", "EN"])
+    t = LANGUAGES[language]
+    st.divider()
+    city = st.text_input("Cidade / City", value="Lisboa")
+    api_key = st.text_input("OpenWeather API Key", type="password", value="da106eb8a1c706a86299c4ffc3aebba3")
+    st.divider()
+    st.subheader("Tarifa")
+    cycle = st.selectbox("Ciclo / Cycle", ["Simple", "Two-cycle", "Three-cycle"])
+    model_type = st.selectbox("Modelo / Model", ["Fixed", "Variable"])
 
 
-full_df = vega_datasets.data("seattle_weather")
+# ── Dados em tempo real ───────────────────────
+now = datetime.now()
+hour = now.hour
+weekday = now.weekday()   # → passado como day_of_week para make_prediction
+month = now.month
 
-st.set_page_config(
-    # Title and icon for the browser's tab bar:
-    page_title="Seattle Weather",
-    page_icon="🌦️",
-    # Make the content take up the width of the page:
-    layout="wide",
-)
-
-
-"""
-# Seattle Weather
-
-Let's explore the [classic Seattle Weather
-dataset](https://altair-viz.github.io/case_studies/exploring-weather.html)!
-"""
-
-""  # Add a little vertical space. Same as st.write("").
-""
-
-"""
-## 2015 Summary
-"""
-
-""
-
-df_2015 = full_df[full_df["date"].dt.year == 2015]
-df_2014 = full_df[full_df["date"].dt.year == 2014]
-
-max_temp_2015 = df_2015["temp_max"].max()
-max_temp_2014 = df_2014["temp_max"].max()
-
-min_temp_2015 = df_2015["temp_min"].min()
-min_temp_2014 = df_2014["temp_min"].min()
-
-max_wind_2015 = df_2015["wind"].max()
-max_wind_2014 = df_2014["wind"].max()
-
-min_wind_2015 = df_2015["wind"].min()
-min_wind_2014 = df_2014["wind"].min()
-
-max_prec_2015 = df_2015["precipitation"].max()
-max_prec_2014 = df_2014["precipitation"].max()
-
-min_prec_2015 = df_2015["precipitation"].min()
-min_prec_2014 = df_2014["precipitation"].min()
+weather = weather_data(city)
+price = electricity_price(hour, weekday, cycle, model_type)
 
 
-with st.container(horizontal=True, gap="medium"):
-    cols = st.columns(2, gap="medium", width=300)
+# Title 
+st.title(f"Smart Energy Advisor - {city}")
+st.caption(f"{t['footer']}: {now.strftime('%Y-%m-%d %H:%M:%S')}")
 
-    with cols[0]:
-        st.metric(
-            "Max tempearture",
-            f"{max_temp_2015:0.1f}C",
-            delta=f"{max_temp_2015 - max_temp_2014:0.1f}C",
-            width="content",
-        )
+# Dashboard
+col1, col2, col3, col4 = st.columns(4)
 
-    with cols[1]:
-        st.metric(
-            "Min tempearture",
-            f"{min_temp_2015:0.1f}C",
-            delta=f"{min_temp_2015 - min_temp_2014:0.1f}C",
-            width="content",
-        )
-
-    cols = st.columns(2, gap="medium", width=300)
-
-    with cols[0]:
-        st.metric(
-            "Max precipitation",
-            f"{max_prec_2015:0.1f}C",
-            delta=f"{max_prec_2015 - max_prec_2014:0.1f}C",
-            width="content",
-        )
-
-    with cols[1]:
-        st.metric(
-            "Min precipitation",
-            f"{min_prec_2015:0.1f}C",
-            delta=f"{min_prec_2015 - min_prec_2014:0.1f}C",
-            width="content",
-        )
-
-    cols = st.columns(2, gap="medium", width=300)
-
-    with cols[0]:
-        st.metric(
-            "Max wind",
-            f"{max_wind_2015:0.1f}m/s",
-            delta=f"{max_wind_2015 - max_wind_2014:0.1f}m/s",
-            width="content",
-        )
-
-    with cols[1]:
-        st.metric(
-            "Min wind",
-            f"{min_wind_2015:0.1f}m/s",
-            delta=f"{min_wind_2015 - min_wind_2014:0.1f}m/s",
-            width="content",
-        )
-
-    cols = st.columns(2, gap="medium", width=300)
-
-    weather_icons = {
-        "sun": "☀️",
-        "snow": "☃️",
-        "rain": "💧",
-        "fog": "😶‍🌫️",
-        "drizzle": "🌧️",
-    }
-
-    with cols[0]:
-        weather_name = (
-            full_df["weather"].value_counts().head(1).reset_index()["weather"][0]
-        )
-        st.metric(
-            "Most common weather",
-            f"{weather_icons[weather_name]} {weather_name.upper()}",
-        )
-
-    with cols[1]:
-        weather_name = (
-            full_df["weather"].value_counts().tail(1).reset_index()["weather"][0]
-        )
-        st.metric(
-            "Least common weather",
-            f"{weather_icons[weather_name]} {weather_name.upper()}",
-        )
-
-""
-""
-
-"""
-## Compare different years
-"""
-
-YEARS = full_df["date"].dt.year.unique()
-selected_years = st.pills(
-    "Years to compare", YEARS, default=YEARS, selection_mode="multi"
-)
-
-if not selected_years:
-    st.warning("You must select at least 1 year.", icon=":material/warning:")
-
-df = full_df[full_df["date"].dt.year.isin(selected_years)]
-
-cols = st.columns([3, 1])
-
-with cols[0].container(border=True, height="stretch"):
-    "### Temperature"
-
-    st.altair_chart(
-        alt.Chart(df)
-        .mark_bar(width=1)
-        .encode(
-            alt.X("date", timeUnit="monthdate").title("date"),
-            alt.Y("temp_max").title("temperature range (C)"),
-            alt.Y2("temp_min"),
-            alt.Color("date:N", timeUnit="year").title("year"),
-            alt.XOffset("date:N", timeUnit="year"),
-        )
-        .configure_legend(orient="bottom")
+with col1:
+    st.metric(
+        t["temp"], 
+        f"{weather['temperature']}ºC" if weather else "N/A", 
+        delta=f"Humidade: {weather['humidity']}%" if weather else None
     )
 
-with cols[1].container(border=True, height="stretch"):
-    "### Weather distribution"
+with col2:
+    st.metric(t["price"], f"{price:.3f} €/kWh")
 
-    st.altair_chart(
-        alt.Chart(df)
-        .mark_arc()
-        .encode(
-            alt.Theta("count()"),
-            alt.Color("weather:N"),
-        )
-        .configure_legend(orient="bottom")
-    )
+with col3:
+    st.metric(t["clouds_label"], f"{weather['clouds']}%" if weather else "N/A")
+
+with col4:
+    wind_kmh = weather["wind_speed"] * 3.6 if weather else None
+
+    st.metric(t["wind_label"], f"{wind_kmh:.1f} km/h" if wind_kmh is not None else "N/A",)
+
+st.divider()
+
+# Prevision
+st.subheader(f"{t['forecast_section']}")
+
+predicted_consumption = make_prediction(model, scaler, historical_data, hour, weekday, month)
+predicted_production = 0.0
+
+col_pred1, col_pred2 = st.columns(2)
+with col_pred1:
+    st.metric(f"{t['prediction_text']}", f"{predicted_consumption:.3f} kWh")
+with col_pred2:
+    st.metric(t["solar_label"], f"{predicted_production:.3f} kWh")
+
+st.divider()
+
+# Recommendations
+st.subheader(t["rec_title"])
+
+cloud_couverage = weather['clouds'] if weather else 0
+advices = generate_recommendation(predicted_consumption, predicted_production, price, cloud_couverage, t)
+
+for advice in advices:
+    st.info(f"{advice}")
+
+st.divider()
 
 
-cols = st.columns(2)
+# Graphs
+st.subheader(t["hourly_chart"])
 
-with cols[0].container(border=True, height="stretch"):
-    "### Wind"
+prices = [electricity_price(h, weekday, cycle, model_type) for h in range(24)]
+df_tariff = pd.DataFrame({"Hour": list(range(24)), "Price (€/kWh)": prices})
 
-    st.altair_chart(
-        alt.Chart(df)
-        .transform_window(
-            avg_wind="mean(wind)",
-            std_wind="stdev(wind)",
-            frame=[0, 14],
-            groupby=["monthdate(date)"],
-        )
-        .mark_line(size=1)
-        .encode(
-            alt.X("date", timeUnit="monthdate").title("date"),
-            alt.Y("avg_wind:Q").title("average wind past 2 weeks (m/s)"),
-            alt.Color("date:N", timeUnit="year").title("year"),
-        )
-        .configure_legend(orient="bottom")
-    )
+fig = px.line(df_tariff, x="Hour", y="Price (€/kWh)", markers=True,
+              title=t["chart_title"], color_discrete_sequence=["#f7a600"])
+fig.add_vline(x=hour, line_dash="dash", line_color="red",
+              annotation_text=t["now_label"])
+st.plotly_chart(fig, use_container_width=True)
 
-with cols[1].container(border=True, height="stretch"):
-    "### Precipitation"
-
-    st.altair_chart(
-        alt.Chart(df)
-        .mark_bar()
-        .encode(
-            alt.X("date:N", timeUnit="month").title("date"),
-            alt.Y("precipitation:Q").aggregate("sum").title("precipitation (mm)"),
-            alt.Color("date:N", timeUnit="year").title("year"),
-        )
-        .configure_legend(orient="bottom")
-    )
-
-cols = st.columns(2)
-
-with cols[0].container(border=True, height="stretch"):
-    "### Monthly weather breakdown"
-    ""
-
-    st.altair_chart(
-        alt.Chart(df)
-        .mark_bar()
-        .encode(
-            alt.X("month(date):O", title="month"),
-            alt.Y("count():Q", title="days").stack("normalize"),
-            alt.Color("weather:N"),
-        )
-        .configure_legend(orient="bottom")
-    )
-
-with cols[1].container(border=True, height="stretch"):
-    "### Raw data"
-
-    st.dataframe(df)
+st.caption("Smart Energy Advisor © 2026 | Powered by XGBoost + OpenWeatherMap")

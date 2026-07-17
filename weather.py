@@ -1,10 +1,13 @@
 import requests
+import streamlit as st
 
-def obtain_local_weather(city="Lisboa", api_key="da106eb8a1c706a86299c4ffc3aebba3"):
+def obtain_local_weather(city="Lisboa"):
     """
     Obtain weather information for a specific city using the OpenWeatherMap API. Obtém informações meteorológicas para uma cidade específica usando a API OpenWeatherMap.
 
     """
+    api_key = st.secrets["OPENWEATHER_API_KEY"]
+
     url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={api_key}&units=metric&lang=pt"
     
     try:
@@ -14,7 +17,7 @@ def obtain_local_weather(city="Lisboa", api_key="da106eb8a1c706a86299c4ffc3aebba
 
         data = response.json()
         
-        climate = {
+        return {
             "city": data.get("name"),
             "temperature": data.get("main", {}).get("temp"),
             "humidity": data.get("main", {}).get("humidity"),
@@ -23,39 +26,27 @@ def obtain_local_weather(city="Lisboa", api_key="da106eb8a1c706a86299c4ffc3aebba
             "icon": data.get("weather", [{}])[0].get("icon"),
             "wind_speed": data.get("wind", {}).get("speed"),
         }
-        return climate
     
     except requests.exceptions.RequestException as e:
         print(f"Error connecting to OpenWeatherMap API: {e}")
         return None
     
-def future_weather(city="Lisboa", api_key="da106eb8a1c706a86299c4ffc3aebba3"):
+def future_weather(city="Lisboa"):
     """
     Obtain weather forecasts for a specific city using the OpenWeatherMap API. Obtém previsões meteorológicas para uma cidade específica usando a API OpenWeatherMap.
     """
+    api_key = st.secrets["OPENWEATHER_API_KEY"]
+
     # Note:Some account plans use the /forecast endpoint. 
     url = f"http://api.openweathermap.org/data/2.5/forecast?q={city}&appid={api_key}&units=metric&lang=pt"
     
     try:
-        response = requests.get(url)
+        response = requests.get(url, timeout=10)
         response.raise_for_status()  
-        data = response.json()
         
         # Returns the list of forecasts (usually every 3 hours)
-        return data["list"]
+        return response.json()["list"]
     
-    except Exception as e:
-        print(f"Error obtaining weather forecast: {e}")
+    except requests.exceptions.RequestException:
         return None
     
-if __name__ == "__main__":
-
-    my_key = "da106eb8a1c706a86299c4ffc3aebba3"
-
-    city = input("Indicate which city you are in: ")
-
-    results = obtain_local_weather(city, my_key)
-    
-    if results:
-        print(f"Climate in {results['city']}: {results['temperature']}ºC, {results['weather_description']}")
-        print(f"Humidity: {results['humidity']}%")
