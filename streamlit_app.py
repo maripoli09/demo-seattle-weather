@@ -19,15 +19,18 @@ model, scaler, historical_data = load_all()
 
 # ── Sidebar ──────────────────────────────────
 with st.sidebar:
-    st.title("Definições")
     t = LANGUAGES["PT"]  # Default to PT initially
+    st.title(t["definitions"])
     language = st.selectbox(t["language_label"], ["PT", "EN"])
     t = LANGUAGES[language]
     st.divider()
+
     st.subheader(t["location_label"])
     city = st.text_input(t["city_label"], value="Lisboa")
-    api_key = st.text_input("OpenWeather API Key", type="password", value="da106eb8a1c706a86299c4ffc3aebba3")
+    api_key_input = st.text_input("OpenWeather API Key", type="password", value="")
+    api_key = api_key_input or st.secrets.get("OPENWEATHER_API_KEY")    
     st.divider()
+
     st.subheader(t["tariff_label"])
     cycle = st.selectbox(t["cycle_label"], t["cycle_options"])
     price_type = st.selectbox(t["price_label"], t["price_options"])
