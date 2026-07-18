@@ -1,6 +1,7 @@
 import pandas as pd
 import pickle
 import numpy as np
+import math
 from datetime import datetime, timedelta
 
 def load_smart_models():
@@ -50,12 +51,15 @@ def make_prediction(model, scaler, historical_data, hour, day_of_week, month):
     return float(max(0, prediction[0]))
 
 
-def estimate_solar_production(num_panels, panel_wattage, clouds):
+def estimate_solar_production(num_panels, panel_wattage, clouds, hour=None):
     """
     Estimate of solar production based in the infrastructure of the user and clouds.
     """
-    if num_panels == 0:
+    if num_panels <= 0:
         return 0.0
+    
+    if hour is None:
+        hour = datetime.now().hour
     
     # Maximum installed power in kW
     max_power_kw = (num_panels * panel_wattage) / 1000.0
@@ -63,16 +67,15 @@ def estimate_solar_production(num_panels, panel_wattage, clouds):
     # Cloud loss factor(simplified)
     # If clouds=0%, fator=1.0. If clouds=100%, fator=0.2
     cloud_factor = 1.0 - (0.8 * (clouds / 100.0))
+    cloud_factor = max(0.2, min(1.0, cloud_factor))
+
 
     # Ajusted by hour of the day (production just between 7h and 20h)
-    hour = datetime.now().hour
     if 7 <= hour <= 20:
-        import math
         time_factor = math.sin(math.pi * (hour - 7)/13)
 
-        return float(max_power_kw * cloud_factor * time_factor)
-        return 0.0
-    
+        return float(max_power_kw * cloud_factor * max(0.0, time_factor))
+    return 0.0
 
 
 def generate_recommendation(predicted_consumption, predicted_production, current_price, cloud_coverage, t):
@@ -119,6 +122,15 @@ LANGUAGES = {
         "rec_partial_solar": "Produção solar ativa mas insuficiente — Tenta reduzir o consumo para maximizar o autoconsumo.",
         "rec_clouds": "Nebulosidade elevada — A produção solar pode ser reduzida.",
         "rec_none": "Sem recomendações específicas neste momento.",
+        "language_label": "Lingua",
+        "location_label": "A minha Localização",
+        "city_label": "Cidade",
+        "tariff_label": "Tarifa",
+        "cycle_label": "Ciclo",
+        "model_label": "Modelo",
+        "panel_number_label": "Número de Painéis Solares",
+        "panel_power_label": "Potência de cada Painel (W)",
+        "installed_power_label": "Potência Instalada",
     },
     "EN": {
         "temp": "Temperature",
@@ -139,5 +151,14 @@ LANGUAGES = {
         "rec_partial_solar": "Solar production is active but insufficient — Try reducing usage to maximize self-consumption.",
         "rec_clouds": "High cloud coverage — Solar production may be low.",
         "rec_none": "No specific advice at this moment.",
+        "language_label": "Language",
+        "location_label": "My Location",
+        "city_label": "City",
+        "tariff_label": "Tariff",
+        "cycle_label": "Cycle",
+        "model_label": "Model",
+        "panel_number_label": "Number of Solar Panels",
+        "panel_power_label": "Power of each Panel (W)",
+        "installed_power_label": "Installed Power",
     }
 }
