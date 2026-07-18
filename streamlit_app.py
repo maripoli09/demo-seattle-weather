@@ -29,12 +29,12 @@ with st.sidebar:
     api_key = st.text_input("OpenWeather API Key", type="password", value="da106eb8a1c706a86299c4ffc3aebba3")
     st.divider()
     st.subheader(t["tariff_label"])
-    cycle = st.selectbox(t["cycle_label"], ["Simple", "Two-cycle", "Three-cycle"])
-    model_type = st.selectbox(t["model_label"], ["Fixed", "Variable"])
+    cycle = st.selectbox(t["cycle_label"], t["cycle_options"])
+    price_type = st.selectbox(t["price_label"], t["price_options"])
     st.subheader(t["panel_number_label"])
     num_solar_panels = st.number_input(t["panel_number_label"], min_value=0, value=0)
     st.subheader(t["panel_power_label"])
-    panel_wattage = st.number_input(t["panel_power_label"], min_value=0, value=450)
+    panel_wattage = st.number_input(t["panel_power_label"], min_value=0, value=400)
     installed_power_kw = (num_solar_panels * panel_wattage) / 1000.0
     st.caption(f"{t['installed_power_label']}: {installed_power_kw:.2f} kW")
 
@@ -46,7 +46,7 @@ weekday = now.weekday()   # → passado como day_of_week para make_prediction
 month = now.month
 
 weather = weather_data(city)
-price = electricity_price(hour, weekday, cycle, model_type)
+price = electricity_price(hour, weekday, cycle, price_type)
 
 predicted_consumption = make_prediction(model, scaler, historical_data, hour, weekday, month)
 cloud_coverage = weather['clouds'] if weather else 0
@@ -59,6 +59,10 @@ if predicted_production > predicted_consumption:
     status_line = "A produção solar está a cobrir parte do consumo."
     main_title = "Tens energia solar disponível"
     main_text = "Bom momento para carregar VE ou usar eletrodomésticos."
+elif price <= 0.15:
+    status_line = "Preço em vazio neste momento."
+    main_title = "Bom momento para usar eletrodomésticos"
+    main_text = "Preço baixo: aproveita para cargas flexíveis."
 elif price > 0.22 and predicted_production < predicted_consumption:
     status_line = "Estás a consumir mais energia do que estás a produzir."
     main_title = "Evita consumos elevados neste momento"
@@ -165,7 +169,7 @@ st.divider()
 # Graphs
 st.subheader(t["hourly_chart"])
 
-prices = [electricity_price(h, weekday, cycle, model_type) for h in range(24)]
+prices = [electricity_price(h, weekday, cycle, price_type) for h in range(24)]
 df_tariff = pd.DataFrame({"Hour": list(range(24)), "Price (€/kWh)": prices})
 
 fig = px.line(df_tariff, x="Hour", y="Price (€/kWh)", markers=True,
@@ -213,6 +217,29 @@ fig_energy.add_vline(
 )
 
 st.plotly_chart(fig_energy, use_container_width=True)
+
+
+with st.expander("Comparar ciclos tarifários"):
+    rows_compare = []
+    for cycle_name in ["Simple", "Two-cycle", "Three-cycle"]:
+        for h in range(24):
+            rows_compare.append(
+                {"Hour": h, 
+                 "Price": electricity_price(h, weekday, cycle_name, price_type), 
+                 "Cycle": cycle_name
+                 }
+            )
+    df_compare = pd.DataFrame(rows_compare)
+    fig_compare = px.line(
+        df_compare, 
+        x="Hour", 
+        y="Price", 
+        color="Cycle", 
+        markers=True,
+        title="Comparação de ciclos tarifários"
+    )
+    fig_compare.add_vline(x=hour, line_dash="dash", line_color="red", annotation_text="Agora")
+    st.plotly_chart(fig_compare, use_container_width=True)
 
 st.subheader(f"Meteorologia em {city}")
 if weather:

@@ -5,6 +5,24 @@ def electricity_price(hour, weekday, cycle_type="Two-cycle", price_model="Fixed"
     Calculates the electricity price based on hour and tariff cycle.
     In Portugal, there are different tariffs depending on the cycle type (Simple, Two-cycle, or Three-cycle) and the price model (Fixed or Variable).
     """
+
+    cycle_alias = {
+        "Simples": "Simple",
+        "Bi-horária": "Two-cycle",
+        "Biciclo": "Two-cycle",
+        "Tri-horária": "Three-cycle",
+        "Triciclo": "Three-cycle",
+    }
+    price_alias = {
+        "Preço fixo": "Fixed",
+        "Fixo": "Fixed",
+        "Preço variável": "Variable",
+        "Variável": "Variable",
+    }
+
+    cycle_type = cycle_alias.get(cycle_type, cycle_type)
+    price_model = price_alias.get(price_model, price_model)
+
     if price_model == "Fixed":
         base_price = 0.18 # fictitious value
 
