@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import altair as alt
+import joblib
 from pathlib import Path
 
 st.set_page_config(page_title="Analise de Dados - 300 Clientes", layout="wide")
@@ -13,8 +14,11 @@ DATA_PATH = Path("df_gc_clean.pkl")
 
 @st.cache_data
 def load_data(path: Path) -> pd.DataFrame:
-    df = pd.read_pickle(path)
-    return df
+    # Primeiro tenta leitura pandas/pickle; se falhar, tenta joblib.
+    try:
+        return pd.read_pickle(path)
+    except Exception:
+        return joblib.load(path)
 
 try:
     df = load_data(DATA_PATH)
@@ -31,11 +35,24 @@ st.markdown(
 
 # 2) Normalizar nomes de colunas (ajusta conforme o teu dataframe)
 # Tenta encontrar coluna de timestamp e consumo
-possible_ts = ["timestamp", "Timestamp", "date", "datetime", "DateTime", "TS"]
-possible_cons = ["consumo", "consumption", "kwh", "energy", "value", "GC"]
+possible_ts = ["timestamp", "datetime", "date", "data_hora", "ts"]
+possible_cons_exact = ["energy_kwh", "consumo", "consumption", "value", "gc"]
+possible_cons_contains = ["kwh", "energy", "consum"]
 
-ts_col = next((c for c in possible_ts if c in df.columns), None)
-cons_col = next((c for c in possible_cons if c in df.columns), None)
+cols_map = {c.lower(): c for c in df.columns}
+
+ts_col = next((cols_map[c] for c in possible_ts if c in cols_map), None)
+
+cons_col = next((cols_map[c] for c in possible_cons_exact if c in cols_map), None)
+if cons_col is None:
+    cons_col = next(
+        (
+            original
+            for lower, original in cols_map.items()
+            if any(token in lower for token in possible_cons_contains)
+        ),
+        None,
+    )
 
 if ts_col is None or cons_col is None:
     st.error(

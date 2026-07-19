@@ -1,8 +1,18 @@
 import pandas as pd
 import pickle
+import joblib
 import numpy as np
 import math
 from datetime import datetime, timedelta
+
+
+def _safe_load_pkl(path):
+    """Load .pkl files serialized either with pickle or joblib."""
+    try:
+        with open(path, 'rb') as f:
+            return pickle.load(f)
+    except Exception:
+        return joblib.load(path)
 
 def load_smart_models():
     """
@@ -10,12 +20,9 @@ def load_smart_models():
 
     """
     try:
-        with open('smart_energy_model.pkl', 'rb') as f:
-            model = pickle.load(f)
-        with open('scaler.pkl', 'rb') as s:
-            scaler = pickle.load(s)
-        with open('df_gc_clean.pkl', 'rb') as d:
-            historical_data = pickle.load(d)
+        model = _safe_load_pkl('smart_energy_model.pkl')
+        scaler = _safe_load_pkl('scaler.pkl')
+        historical_data = _safe_load_pkl('df_gc_clean.pkl')
         return model, scaler, historical_data
 
     except Exception as e:
