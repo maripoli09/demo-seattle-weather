@@ -5,3 +5,4 @@ plotly
 requests
 xgboost
 scikit-learn
+supabasesupabase

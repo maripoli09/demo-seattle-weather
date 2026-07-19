@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 import plotly.express as px
+from supabase import create_client, Client
 from tariffs import electricity_price
 from weather import obtain_local_weather
 from utils import LANGUAGES, estimate_solar_production, load_smart_models, make_prediction, generate_recommendation
@@ -16,6 +17,24 @@ def load_all():
     return load_smart_models()
 
 model, scaler, historical_data = load_all()
+
+@st.cache_resource
+def get_supabase_client() -> Client | None:
+    url = st.secrets.get("SUPABASE_URL")
+    key = st.secrets.get("SUPABASE_KEY")
+    if not url or not key:
+        return None
+    return create_client(url, key)
+
+def save_simulation(payload: dict) -> tuple[bool, str]:
+    try:
+        supabase = get_supabase_client()
+        if supabase is None:
+            return False, "Supabase não configurado."
+        supabase.table("simulations").insert(payload).execute()
+        return True, "Simulação guardada com sucesso."
+    except Exception as e:
+        return False, f"Erro ao guardar: {e}"
 
 # ── Sidebar ──────────────────────────────────
 with st.sidebar:
@@ -204,6 +223,60 @@ for i in range(24):
     )
 
 df_energy = pd.DataFrame(rows)
+
+simulation_payload = {
+    "city": city,
+    "cycle": cycle,
+    "price_type": price_type,
+    "num_solar_panels": int(num_solar_panels),
+    "panel_wattage": int(panel_wattage),
+    "predicted_consumption": float(predicted_consumption),
+    "predicted_production": float(predicted_production),
+    "energy_balance": float(energy_balance),
+    "price_now": float(price),
+    "estimated_cost_without_solar": float(custo_sem_solar) if "custo_sem_solar" in locals() else None,
+    "estimated_cost_with_solar": float(custo_com_solar) if "custo_com_solar" in locals() else None,
+    "estimated_savings": float(poupanca) if "poupanca" in locals() else None,
+    "model_version": "xgboost_v1"
+}
+
+st.divider()
+if st.button("Guardar simulação no histórico"):
+    ok, msg = save_simulation(simulation_payload)
+    if ok:
+        st.success(msg)
+    else:
+        st.warning(msg)
+
+        
+st.divider()
+st.subheader("Simulador de custo e poupanca (24h)")
+
+# custo sem solar: todo o consumo comprado a rede
+custo_sem_solar = 0.0
+# custo com solar: compra apenas deficit
+custo_com_solar = 0.0
+
+for i in range(24):
+    h = int(df_energy.loc[i, "Hour"])
+    preco_h = electricity_price(h, weekday, cycle, price_type)
+    consumo_h = float(df_energy.loc[i, "Consumo_previsto"])
+    producao_h = float(df_energy.loc[i, "Producao_solar"])
+
+    custo_sem_solar += consumo_h * preco_h
+    deficit = max(consumo_h - producao_h, 0.0)
+    custo_com_solar += deficit * preco_h
+
+poupanca = custo_sem_solar - custo_com_solar
+
+c_a, c_b, c_c = st.columns(3)
+with c_a:
+    st.metric("Custo sem solar (24h)", f"{custo_sem_solar:.2f} €")
+with c_b:
+    st.metric("Custo com solar (24h)", f"{custo_com_solar:.2f} €")
+with c_c:
+    st.metric("Poupanca estimada (24h)", f"{poupanca:.2f} €")
+
 
 fig_energy = px.line(
     df_energy,

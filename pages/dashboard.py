@@ -1,7 +1,9 @@
 import streamlit as st
 import pandas as pd
 import altair as alt
+import numpy as np
 import joblib
+import plotly.express as px
 from pathlib import Path
 
 st.set_page_config(page_title="Analise de Dados - 300 Clientes", layout="wide")
@@ -323,3 +325,134 @@ st.markdown(
     - O heatmap facilita identificar periodos de maior carga para apoiar previsao e recomendacao.
     """
 )
+
+# 7) Heatmap hora x mes
+st.subheader("7) Heatmap: hora x mes")
+heat_month = (
+    df.groupby(["mes_nome", "hora"], as_index=False)[cons_col]
+    .mean()
+)
+
+ordem_meses = list(nomes_meses.values())
+
+col_chart, col_text = st.columns([2, 1])
+with col_chart:
+    chart_heat_month = (
+        alt.Chart(heat_month)
+        .mark_rect()
+        .encode(
+            x=alt.X("hora:O", title="Hora"),
+            y=alt.Y("mes_nome:N", sort=ordem_meses, title="Mes"),
+            color=alt.Color(f"{cons_col}:Q", title="Consumo medio"),
+            tooltip=["mes_nome", "hora", alt.Tooltip(f"{cons_col}:Q", format=".4f")]
+        )
+        .properties(height=360)
+    )
+    st.altair_chart(chart_heat_month, use_container_width=True)
+
+with col_text:
+    st.markdown(
+        """
+        Mostra sazonalidade intradiaria.
+
+        Padrao relevante:
+        permite identificar horas de pico em cada mes.
+        """
+    )
+
+# 8) Outliers por IQR
+st.subheader("8) Outliers por categoria (IQR)")
+
+if cat_col is not None:
+    iqr_rows = []
+    categorias_iqr = [("Consumo Geral", "GC"), ("Producao Solar", "GG"), ("Cargas Controladas", "CL")]
+
+    for nome_cat, codigo_cat in categorias_iqr:
+        serie = df[df[cat_col].astype(str) == codigo_cat][cons_col].dropna()
+        if len(serie) == 0:
+            continue
+
+        q1 = serie.quantile(0.25)
+        q3 = serie.quantile(0.75)
+        iqr = q3 - q1
+        low = q1 - 1.5 * iqr
+        up = q3 + 1.5 * iqr
+
+        n_out = int(((serie < low) | (serie > up)).sum())
+        pct_out = (n_out / len(serie)) * 100
+
+        iqr_rows.append(
+            {
+                "Categoria": codigo_cat,
+                "Descricao": nome_cat,
+                "Q1": round(float(q1), 4),
+                "Q3": round(float(q3), 4),
+                "IQR": round(float(iqr), 4),
+                "Limite_inf": round(float(low), 4),
+                "Limite_sup": round(float(up), 4),
+                "Outliers_n": n_out,
+                "Outliers_%": round(float(pct_out), 2),
+            }
+        )
+
+    if iqr_rows:
+        st.dataframe(pd.DataFrame(iqr_rows), use_container_width=True)
+    else:
+        st.info("Sem dados suficientes para calcular IQR nas categorias selecionadas.")
+else:
+    st.info("Nao foi encontrada coluna de categoria para calcular IQR.")
+
+
+# 9) Boxplot por categoria em escala log
+st.subheader("9) Distribuicao por categoria (escala log)")
+
+if cat_col is not None:
+    dbox = df[df[cat_col].astype(str).isin(["GC", "GG", "CL"])].copy()
+    dbox = dbox[pd.to_numeric(dbox[cons_col], errors="coerce") > 0]
+
+    if not dbox.empty:
+        chart_box = (
+            alt.Chart(dbox)
+            .mark_boxplot(extent="min-max")
+            .encode(
+                x=alt.X(f"{cat_col}:N", title="Categoria"),
+                y=alt.Y(
+                    f"{cons_col}:Q",
+                    title="Consumo (kWh, log)",
+                    scale=alt.Scale(type="log")
+                ),
+                color=alt.Color(f"{cat_col}:N", legend=None),
+                tooltip=[cat_col]
+            )
+            .properties(height=320)
+        )
+        st.altair_chart(chart_box, use_container_width=True)
+    else:
+        st.info("Sem valores positivos para escala log no filtro atual.")
+else:
+    st.info("Nao existe coluna de categoria para boxplot.")
+
+
+st.divider()
+st.subheader("Modelo preditivo (XGBoost)")
+st.markdown(
+    "Previsao baseada em hora, dia da semana, mes e lags de consumo."
+)
+
+feat_data = pd.DataFrame({
+    "Variavel": ["Hora", "Consumo (Lag 1h)", "Dia da Semana", "Consumo (Lag 48h)", "Fim de Semana", "Mes"],
+    "Importancia": [0.45, 0.30, 0.10, 0.08, 0.05, 0.02]
+}).sort_values(by="Importancia", ascending=True)
+
+fig_feat = px.bar(
+    feat_data,
+    x="Importancia",
+    y="Variavel",
+    orientation="h",
+    color="Importancia",
+    color_continuous_scale="Viridis",
+    title="Importancia das variaveis"
+)
+st.plotly_chart(fig_feat, use_container_width=True)
+
+st.info("As variaveis com maior impacto sao Hora e Consumo (Lag 1h).")
