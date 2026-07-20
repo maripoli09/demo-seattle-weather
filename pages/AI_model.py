@@ -27,8 +27,8 @@ features_df = pd.DataFrame(
         {"Variavel": "day_of_week", "Descricao": "Dia da semana (0=segunda ... 6=domingo)"},
         {"Variavel": "month", "Descricao": "Mes do ano (1-12)"},
         {"Variavel": "is_weekend", "Descricao": "Indicador de fim de semana (0/1)"},
-        {"Variavel": "lag_1", "Descricao": "Consumo observado 1 hora antes"},
-        {"Variavel": "lag_48", "Descricao": "Consumo observado 48 horas antes"},
+        {"Variavel": "lag_1", "Descricao": "Consumo observado no intervalo de 30 minutos anterior"},
+        {"Variavel": "lag_48", "Descricao": "Consumo observado no mesmo intervalo do dia anterior"},
     ]
 )
 st.dataframe(features_df, use_container_width=True)
@@ -36,14 +36,16 @@ st.dataframe(features_df, use_container_width=True)
 st.markdown("## 3) Metricas reais do notebook (teste)")
 
 # TODO: substituir pelos valores reais do notebook
-mae_real = 0.0000
-rmse_real = 0.0000
-r2_real = 0.0000
+mae_real = 0.0157
+rmse_real = 0.0218
+r2_real = 0.9799
+mape_real = 4.28
 
-m1, m2, m3 = st.columns(3)
+m1, m2, m3, m4 = st.columns(4)
 m1.metric("MAE", f"{mae_real:.4f}")
 m2.metric("RMSE", f"{rmse_real:.4f}")
 m3.metric("R²", f"{r2_real:.4f}")
+m4.metric("MAPE", f"{mape_real:.2f}%")
 
 st.info(
     "Substitui os placeholders (0.0000) pelos resultados reais obtidos no notebook."
@@ -51,11 +53,10 @@ st.info(
 
 st.markdown("## 4) Importancia das variaveis (modelo real)")
 
-# TODO: substituir pelos valores reais extraidos do modelo treinado
 feat_data = pd.DataFrame(
     {
-        "Variavel": ["hour", "lag_1", "day_of_week", "lag_48", "is_weekend", "month"],
-        "Importancia": [0.45, 0.30, 0.10, 0.08, 0.05, 0.02],
+        "Variavel": ["lag_1", "lag_48", "hour", "month", "is_weekend", "day_of_week",],
+        "Importancia": [0.7893, 0.1411, 0.0407, 0.0174, 0.0057, 0.0057,],
     }
 ).sort_values(by="Importancia", ascending=True)
 

@@ -7,11 +7,6 @@ from tariffs import electricity_price
 from weather import obtain_local_weather
 from utils import LANGUAGES, estimate_solar_production, load_smart_models, make_prediction, generate_recommendation
 
-weather_data = obtain_local_weather
-
-# Configurations of the page
-st.set_page_config(page_title="Smart Energy Advisor", layout="wide")
-
 @st.cache_resource
 def load_all():
     return load_smart_models()
@@ -26,6 +21,9 @@ def get_supabase_client() -> Client | None:
         return None
     return create_client(url, key)
 
+
+
+
 def save_simulation(payload: dict) -> tuple[bool, str]:
     try:
         supabase = get_supabase_client()
@@ -35,6 +33,48 @@ def save_simulation(payload: dict) -> tuple[bool, str]:
         return True, "Simulação guardada com sucesso."
     except Exception as e:
         return False, f"Erro ao guardar: {e}"
+    
+with st.popover("Configurar habitação", use_container_width=False):
+    st.subheader("Dados da habitação")
+
+    city = st.selectbox(
+        "Cidade",
+        ["Lisboa", "Porto", "Coimbra", "Faro", "Funchal"],
+    )
+
+    cycle = st.selectbox(
+        "Ciclo tarifário",
+        ["Simples", "Bi-horária", "Tri-horária"],
+    )
+
+    price_type = st.selectbox(
+        "Tipo de preço",
+        ["Preço fixo", "Preço variável"],
+    )
+
+    num_solar_panels = st.number_input(
+        "Número de painéis solares",
+        min_value=0,
+        value=0,
+        step=1,
+    )
+
+    panel_wattage = st.number_input(
+        "Potência de cada painel (W)",
+        min_value=0,
+        value=400,
+        step=50,
+    )
+
+    installed_power_kw = (num_solar_panels * panel_wattage) / 1000
+
+    st.caption(f"Potência instalada: {installed_power_kw:.2f} kW")
+
+weather_data = obtain_local_weather
+
+# Configurations of the page
+st.set_page_config(page_title="Smart Energy Advisor", layout="wide")
+
 
 # ── Sidebar ──────────────────────────────────
 with st.sidebar:
@@ -44,10 +84,12 @@ with st.sidebar:
     t = LANGUAGES[language]
     st.divider()
 
-    st.subheader(t["location_label"])
-    city = st.text_input(t["city_label"], value="Lisboa")
+    st.subheader("Localização")
+    st.write = (f"{city}")
+    """ 
     api_key_input = st.text_input("OpenWeather API Key", type="password", value="")
     api_key = api_key_input or st.secrets.get("OPENWEATHER_API_KEY")    
+    """
     st.divider()
 
     st.subheader(t["tariff_label"])
@@ -106,6 +148,16 @@ st.write(status_line)
 # Title 
 st.title(f"Smart Energy Advisor - {city}")
 st.caption(f"{t['footer']}: {now.strftime('%Y-%m-%d %H:%M:%S')}")
+st.title("Bem-vindo ao Smart Energy Advisor")
+st.markdown("""
+### Escolha uma opção no menu lateral:
+1. **Dashboard Principal:** Previsão em tempo real e simulação solar.
+2. **Análise de Dados:** Exploração do dataset Ausgrid (300 clientes).
+3. **Modelo IA:** Detalhes técnicos e métricas do XGBoost.
+4. **Histórico:** Registos guardados no Supabase.
+""")
+
+st.info("Podes configurar a tua localização e tarifário na barra lateral de qualquer página.")
 
 # Dashboard
 col1, col2, col3, col4 = st.columns(4)
@@ -131,9 +183,11 @@ with col4:
 st.divider()
 
 if energy_balance > 0.1:
-    balance_text = "Excedente solar"
-else:
+    balance_text = "Excedente solar disponível"
+elif energy_balance >= -0.1:
     balance_text = "Consumo quase totalmente coberto"
+else:
+    balance_text = "Necessário importar energia da rede"
 
 c1, c2, c3 = st.columns(3)
 
@@ -166,7 +220,6 @@ st.divider()
 st.subheader(f"{t['forecast_section']}")
 
 predicted_consumption = make_prediction(model, scaler, historical_data, hour, weekday, month)
-predicted_production = 0.0
 
 col_pred1, col_pred2 = st.columns(2)
 with col_pred1:
@@ -201,6 +254,7 @@ fig.add_vline(x=hour, line_dash="dash", line_color="red",
 st.plotly_chart(fig, use_container_width=True)
 
 
+
 st.divider()
 st.subheader("Balanço energético nas próximas 24 horas")
 
@@ -224,31 +278,29 @@ for i in range(24):
 
 df_energy = pd.DataFrame(rows)
 
-simulation_payload = {
-    "city": city,
-    "cycle": cycle,
-    "price_type": price_type,
-    "num_solar_panels": int(num_solar_panels),
-    "panel_wattage": int(panel_wattage),
-    "predicted_consumption": float(predicted_consumption),
-    "predicted_production": float(predicted_production),
-    "energy_balance": float(energy_balance),
-    "price_now": float(price),
-    "estimated_cost_without_solar": float(custo_sem_solar) if "custo_sem_solar" in locals() else None,
-    "estimated_cost_with_solar": float(custo_com_solar) if "custo_com_solar" in locals() else None,
-    "estimated_savings": float(poupanca) if "poupanca" in locals() else None,
-    "model_version": "xgboost_v1"
-}
+df_energy["Preco"] = [
+    electricity_price(
+        int(hora),
+        weekday,
+        cycle,
+        price_type,
+    )
+    for hora in df_energy["Hour"]
+]
 
-st.divider()
-if st.button("Guardar simulação no histórico"):
-    ok, msg = save_simulation(simulation_payload)
-    if ok:
-        st.success(msg)
-    else:
-        st.warning(msg)
+df_energy["Custo_liquido"] = (
+    (df_energy["Consumo_previsto"] - df_energy["Producao_solar"])
+    .clip(lower=0)
+    * df_energy["Preco"]
+)
+melhor_hora = df_energy.loc[df_energy["Custo_liquido"].idxmin()]
 
-        
+st.success(
+    f"### Melhor hora para consumos flexíveis: {int(melhor_hora['Hour']):02d}:00\n"
+    f"Nessa hora, o custo estimado da energia comprada à rede é "
+    f"{melhor_hora['Custo_liquido']:.3f} €."
+)
+
 st.divider()
 st.subheader("Simulador de custo e poupanca (24h)")
 
@@ -327,5 +379,32 @@ if weather:
     )
 else:
     st.write("Dados meteorológicos indisponíveis.")
+
+
+simulation_payload = {
+    "city": city,
+    "cycle": cycle,
+    "price_type": price_type,
+    "num_solar_panels": int(num_solar_panels),
+    "panel_wattage": int(panel_wattage),
+    "predicted_consumption": float(predicted_consumption),
+    "predicted_production": float(predicted_production),
+    "energy_balance": float(energy_balance),
+    "price_now": float(price),
+    "estimated_cost_without_solar": float(custo_sem_solar) if "custo_sem_solar" in locals() else None,
+    "estimated_cost_with_solar": float(custo_com_solar) if "custo_com_solar" in locals() else None,
+    "estimated_savings": float(poupanca) if "poupanca" in locals() else None,
+    "model_version": "xgboost_v1"
+}
+
+st.divider()
+if st.button("Guardar simulação no histórico"):
+    ok, msg = save_simulation(simulation_payload)
+    if ok:
+        st.success(msg)
+    else:
+        st.warning(msg)
+
+       
 
 st.caption("Smart Energy Advisor © 2026 | Powered by XGBoost + OpenWeatherMap")

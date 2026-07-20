@@ -23,4 +23,4 @@ feat_data = pd.DataFrame({
 fig = px.bar(feat_data, x='Importância', y='Variável', orientation='h', color='Importância', color_continuous_scale='Viridis')
 st.plotly_chart(fig, use_container_width=True)
 
-st.info("💡 A 'Hora' e a componente histórica imediata são os fatores que mais influenciam a previsão.")
+st.info("A 'Hora' e a componente histórica imediata são os fatores que mais influenciam a previsão.")
