@@ -58,32 +58,66 @@ def make_prediction(model, scaler, historical_data, hour, day_of_week, month):
     return float(max(0, prediction[0]))
 
 
-def estimate_solar_production(num_panels, panel_wattage, clouds, hour=None):
+def estimate_solar_production(
+    num_panels,
+    panel_wattage,
+    clouds,
+    hour=None,
+    month=None,
+    temp_c=None,
+):
     """
-    Estimate of solar production based in the infrastructure of the user and clouds.
+    Estima produção solar por hora (kWh) para um sistema residencial.
     """
-    if num_panels <= 0:
+    if num_panels <= 0 or panel_wattage <= 0:
         return 0.0
-    
+
+    now = datetime.now()
     if hour is None:
-        hour = datetime.now().hour
-    
-    # Maximum installed power in kW
-    max_power_kw = (num_panels * panel_wattage) / 1000.0
+        hour = now.hour
+    if month is None:
+        month = now.month
 
-    # Cloud loss factor(simplified)
-    # If clouds=0%, fator=1.0. If clouds=100%, fator=0.2
-    cloud_factor = 1.0 - (0.8 * (clouds / 100.0))
-    cloud_factor = max(0.2, min(1.0, cloud_factor))
+    # Potência instalada (kW)
+    capacity_kw = (num_panels * panel_wattage) / 1000.0
 
+    # Janela solar aproximada para PT
+    if hour < 6 or hour > 20:
+        return 0.0
 
-    # Ajusted by hour of the day (production just between 7h and 20h)
-    if 7 <= hour <= 20:
-        time_factor = math.sin(math.pi * (hour - 7)/13)
+    # Curva diária (pico perto do meio-dia)
+    daylight_curve = max(0.0, math.sin(math.pi * (hour - 6) / 14)) ** 1.35
 
-        return float(max_power_kw * cloud_factor * max(0.0, time_factor))
-    return 0.0
+    # Fator de nuvens (não linear, mais realista)
+    cloud_pct = max(0.0, min(100.0, float(clouds)))
+    cloud_factor = max(0.05, 1.0 - (cloud_pct / 100.0) ** 1.25)
 
+    # Fator sazonal simples (Portugal)
+    monthly_factor = {
+        1: 0.55, 2: 0.65, 3: 0.80, 4: 0.95,
+        5: 1.05, 6: 1.10, 7: 1.12, 8: 1.05,
+        9: 0.90, 10: 0.75, 11: 0.60, 12: 0.50,
+    }.get(month, 0.85)
+
+    # Perdas típicas de sistema (inversor, cabos, sujidade, etc.)
+    performance_ratio = 0.80
+
+    # Temperatura: acima de 25C reduz ligeiramente a eficiência
+    if temp_c is None:
+        temp_factor = 1.0
+    else:
+        temp_factor = 1.0 - max(0.0, float(temp_c) - 25.0) * 0.004
+        temp_factor = max(0.85, min(1.05, temp_factor))
+
+    production_kwh = (
+        capacity_kw
+        * daylight_curve
+        * cloud_factor
+        * monthly_factor
+        * performance_ratio
+        * temp_factor
+    )
+    return float(max(0.0, production_kwh))
 
 def generate_recommendation(predicted_consumption, predicted_production, current_price, cloud_coverage, t):
     """

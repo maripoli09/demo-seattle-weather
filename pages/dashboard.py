@@ -109,8 +109,8 @@ nomes_dias = {
 df["dia_semana_nome"] = df["dia_semana"].map(nomes_dias)
 
 nomes_meses = {
-    1: "Jan", 2: "Fev", 3: "Mar", 4: "Abr", 5: "Mai", 6: "Jun",
-    7: "Jul", 8: "Ago", 9: "Set", 10: "Out", 11: "Nov", 12: "Dez"
+    1: "Jul", 2: "Ago", 3: "Set", 4: "Out", 5: "Nov", 6: "Dez",
+    7: "Jan", 8: "Fev", 9: "Mar", 10: "Abr", 11: "Mai", 12: "Jun"
 }
 df["mes_nome"] = df["mes"].map(nomes_meses)
 
@@ -281,51 +281,7 @@ with col_text:
         """
     )
 
-# 6) Distribuicao por categoria (GC, GG, CL)
-st.subheader("6) Distribuicao do consumo por categoria")
-if cat_col is not None:
-    dcat = df[df[cat_col].astype(str).isin(["GC", "GG", "CL"])].copy()
-
-    if not dcat.empty:
-        col_chart, col_text = st.columns([2, 1])
-        with col_chart:
-            chart_cat = (
-                alt.Chart(dcat)
-                .mark_boxplot(extent="min-max")
-                .encode(
-                    x=alt.X(f"{cat_col}:N", title="Categoria"),
-                    y=alt.Y(f"{cons_col}:Q", title="Consumo (kWh)"),
-                    color=alt.Color(f"{cat_col}:N", legend=None),
-                    tooltip=[cat_col]
-                )
-                .properties(height=320)
-            )
-            st.altair_chart(chart_cat, use_container_width=True)
-        with col_text:
-            st.markdown(
-                """
-                Distribuicao estatistica do consumo por categoria (GC, GG, CL).
-
-                Padrao relevante:
-                permite comparar mediana, dispersao e extremos entre categorias.
-                """
-            )
-    else:
-        st.info("Existe coluna de categoria, mas nao foram encontrados valores GC, GG e CL no filtro atual.")
-else:
-    st.info("Nao foi identificada coluna de categoria no dataframe.")
-
 st.divider()
-st.subheader("Conclusoes principais")
-st.markdown(
-    f"""
-    - A analise confirma padroes temporais claros no consumo agregado.
-    - O pico horario medio ocorre em torno das {peak_hour}h.
-    - O comportamento mensal indica sazonalidade.
-    - A separacao entre dias uteis e fins de semana e relevante para planeamento energetico.
-    - O heatmap facilita identificar periodos de maior carga para apoiar previsao e recomendacao.
-    """
-)
 
 # 7) Heatmap hora x mes
 st.subheader("7) Heatmap: hora x mes")
@@ -364,8 +320,8 @@ with col_text:
 # 8) Outliers por IQR
 st.subheader("8) Outliers por categoria (IQR)")
 
+iqr_rows = []
 if cat_col is not None:
-    iqr_rows = []
     categorias_iqr = [("Consumo Geral", "GC"), ("Producao Solar", "GG"), ("Cargas Controladas", "CL")]
 
     for nome_cat, codigo_cat in categorias_iqr:
@@ -396,12 +352,41 @@ if cat_col is not None:
             }
         )
 
-    if iqr_rows:
-        st.dataframe(pd.DataFrame(iqr_rows), use_container_width=True)
-    else:
-        st.info("Sem dados suficientes para calcular IQR nas categorias selecionadas.")
+if not iqr_rows:
+    fallback_groups = [("Dia Util", df[df["tipo_dia"] == "Dia Util"]), ("Fim de Semana", df[df["tipo_dia"] == "Fim de Semana"])]
+
+    for nome_grupo, subset in fallback_groups:
+        serie = subset[cons_col].dropna()
+        if len(serie) == 0:
+            continue
+
+        q1 = serie.quantile(0.25)
+        q3 = serie.quantile(0.75)
+        iqr = q3 - q1
+        low = q1 - 1.5 * iqr
+        up = q3 + 1.5 * iqr
+
+        n_out = int(((serie < low) | (serie > up)).sum())
+        pct_out = (n_out / len(serie)) * 100
+
+        iqr_rows.append(
+            {
+                "Categoria": nome_grupo,
+                "Descricao": nome_grupo,
+                "Q1": round(float(q1), 4),
+                "Q3": round(float(q3), 4),
+                "IQR": round(float(iqr), 4),
+                "Limite_inf": round(float(low), 4),
+                "Limite_sup": round(float(up), 4),
+                "Outliers_n": n_out,
+                "Outliers_%": round(float(pct_out), 2),
+            }
+        )
+
+if iqr_rows:
+    st.dataframe(pd.DataFrame(iqr_rows), use_container_width=True)
 else:
-    st.info("Nao foi encontrada coluna de categoria para calcular IQR.")
+    st.info("Sem dados suficientes para calcular IQR nos grupos disponiveis.")
 
 
 # 9) Boxplot por categoria em escala log
@@ -409,51 +394,44 @@ st.subheader("9) Distribuicao por categoria (escala log)")
 
 if cat_col is not None:
     dbox = df[df[cat_col].astype(str).isin(["GC", "GG", "CL"])].copy()
-    dbox = dbox[pd.to_numeric(dbox[cons_col], errors="coerce") > 0]
-
-    if not dbox.empty:
-        chart_box = (
-            alt.Chart(dbox)
-            .mark_boxplot(extent="min-max")
-            .encode(
-                x=alt.X(f"{cat_col}:N", title="Categoria"),
-                y=alt.Y(
-                    f"{cons_col}:Q",
-                    title="Consumo (kWh, log)",
-                    scale=alt.Scale(type="log")
-                ),
-                color=alt.Color(f"{cat_col}:N", legend=None),
-                tooltip=[cat_col]
-            )
-            .properties(height=320)
-        )
-        st.altair_chart(chart_box, use_container_width=True)
-    else:
-        st.info("Sem valores positivos para escala log no filtro atual.")
+    group_col = cat_col
+    group_title = "Categoria"
 else:
-    st.info("Nao existe coluna de categoria para boxplot.")
+    dbox = df.copy()
+    group_col = "tipo_dia"
+    group_title = "Tipo de dia"
 
+dbox = dbox[pd.to_numeric(dbox[cons_col], errors="coerce") > 0]
+
+if not dbox.empty:
+    chart_box = (
+        alt.Chart(dbox)
+        .mark_boxplot(extent="min-max")
+        .encode(
+            x=alt.X(f"{group_col}:N", title=group_title),
+            y=alt.Y(
+                f"{cons_col}:Q",
+                title="Consumo (kWh, log)",
+                scale=alt.Scale(type="log")
+            ),
+            color=alt.Color(f"{group_col}:N", legend=None),
+            tooltip=[group_col]
+        )
+        .properties(height=320)
+    )
+    st.altair_chart(chart_box, use_container_width=True)
+else:
+    st.info("Sem valores positivos suficientes para a escala log nos grupos disponiveis.")
 
 st.divider()
-st.subheader("Modelo preditivo (XGBoost)")
+
+st.subheader("Conclusoes principais")
 st.markdown(
-    "Previsao baseada em hora, dia da semana, mes e lags de consumo."
+    f"""
+    - A analise confirma padroes temporais claros no consumo agregado.
+    - O pico horario medio ocorre em torno das {peak_hour}h.
+    - O comportamento mensal indica sazonalidade.
+    - A separacao entre dias uteis e fins de semana e relevante para planeamento energetico.
+    - O heatmap facilita identificar periodos de maior carga para apoiar previsao e recomendacao.
+    """
 )
-
-feat_data = pd.DataFrame({
-    "Variavel": ["Hora", "Consumo (Lag 1h)", "Dia da Semana", "Consumo (Lag 48h)", "Fim de Semana", "Mes"],
-    "Importancia": [0.45, 0.30, 0.10, 0.08, 0.05, 0.02]
-}).sort_values(by="Importancia", ascending=True)
-
-fig_feat = px.bar(
-    feat_data,
-    x="Importancia",
-    y="Variavel",
-    orientation="h",
-    color="Importancia",
-    color_continuous_scale="Viridis",
-    title="Importancia das variaveis"
-)
-st.plotly_chart(fig_feat, use_container_width=True)
-
-st.info("As variaveis com maior impacto sao Hora e Consumo (Lag 1h).")
