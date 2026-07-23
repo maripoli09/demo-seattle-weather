@@ -103,7 +103,12 @@ def ensure_profile_exists() -> tuple[bool, str]:
         return False, "Sessao invalida ou Supabase nao configurado."
 
     try:
-        supabase.table("profiles").upsert({"id": user.id}, on_conflict="id").execute()
+        profile_payload = {"id": user.id}
+        user_name = st.session_state.get("user_name")
+        if user_name:
+            profile_payload["user_name"] = user_name
+
+        supabase.table("profiles").upsert(profile_payload, on_conflict="id").execute()
         return True, ""
     except Exception as e:
         return False, f"Erro ao garantir perfil: {e}"
@@ -142,6 +147,50 @@ def signup_error_message(error: Exception) -> str:
 
     return f"Erro ao criar conta: {error}"
 
+
+def extract_user_name(user: Any) -> str:
+    """Get username from metadata with sensible fallback."""
+    metadata = getattr(user, "user_metadata", {}) or {}
+    user_name = metadata.get("user_name")
+    if user_name:
+        return str(user_name)
+
+    email = getattr(user, "email", "") or ""
+    if "@" in email:
+        return email.split("@", 1)[0]
+    return "utilizador"
+
+
+def resolve_user_name(user: Any) -> str:
+    """Resolve username from session, metadata or profile, without exposing full email."""
+    session_user_name = (st.session_state.get("user_name") or "").strip()
+    if session_user_name:
+        return session_user_name
+
+    metadata_user_name = extract_user_name(user)
+    if metadata_user_name and metadata_user_name != "utilizador":
+        return metadata_user_name
+
+    supabase = get_supabase_client(authenticated=True)
+    if supabase is not None and getattr(user, "id", None):
+        try:
+            result = (
+                supabase.table("profiles")
+                .select("user_name")
+                .eq("id", user.id)
+                .limit(1)
+                .execute()
+            )
+            profile_rows = getattr(result, "data", []) or []
+            if profile_rows:
+                profile_user_name = (profile_rows[0].get("user_name") or "").strip()
+                if profile_user_name:
+                    return profile_user_name
+        except Exception:
+            pass
+
+    return "utilizador"
+
 if "user" not in st.session_state:
     st.session_state.user = None
 
@@ -150,6 +199,9 @@ if "access_token" not in st.session_state:
 
 if "refresh_token" not in st.session_state:
     st.session_state.refresh_token = None
+
+if "user_name" not in st.session_state:
+    st.session_state.user_name = None
 
 @st.dialog("Iniciar sessão")
 def popup_login() -> None:
@@ -162,6 +214,8 @@ def popup_login() -> None:
 
     email = st.text_input("Email")
     password = st.text_input("Palavra-passe", type="password")
+    user_name_input = st.text_input("User name", placeholder="Ex.: joao123")
+    feedback = st.empty()
 
     col_login, col_register = st.columns(2)
 
@@ -174,39 +228,51 @@ def popup_login() -> None:
                 st.session_state.user = response.user
                 st.session_state.access_token = response.session.access_token
                 st.session_state.refresh_token = response.session.refresh_token
+                if user_name_input.strip():
+                    st.session_state.user_name = user_name_input.strip()
+                else:
+                    st.session_state.user_name = resolve_user_name(response.user)
                 ok_profile, profile_msg = ensure_profile_exists()
                 if not ok_profile:
-                    st.warning(profile_msg)
-                st.success(f"Bem-vindo, {response.user.email}!")
+                    feedback.warning(profile_msg)
+                feedback.success(f"Bem-vindo, {st.session_state.user_name}!")
                 st.rerun()
             except Exception as e:
-                st.error(f"Erro ao iniciar sessão: {e}")
+                feedback.error(f"Erro ao iniciar sessão: {e}")
 
     with col_register:
         if st.button("Criar conta", use_container_width=True):
             if not email or not password:
-                st.error("Preenche o email e a palavra-passe para criar conta.")
+                feedback.error("Preenche o email e a palavra-passe para criar conta.")
+                return
+            if not user_name_input.strip():
+                feedback.error("Preenche também o user name para criar conta.")
                 return
             if len(password) < 6:
-                st.error("A palavra-passe deve ter pelo menos 6 caracteres.")
+                feedback.error("A palavra-passe deve ter pelo menos 6 caracteres.")
                 return
 
             try:
                 response = supabase.auth.sign_up(
-                    {"email": email, "password": password}
+                    {
+                        "email": email,
+                        "password": password,
+                        "options": {"data": {"user_name": user_name_input.strip()}},
+                    }
                 )
                 if response.session is not None:
                     st.session_state.user = response.user
                     st.session_state.access_token = response.session.access_token
                     st.session_state.refresh_token = response.session.refresh_token
+                    st.session_state.user_name = user_name_input.strip()
                     ok_profile, profile_msg = ensure_profile_exists()
                     if not ok_profile:
-                        st.warning(profile_msg)
-                st.success(
+                        feedback.warning(profile_msg)
+                feedback.success(
                     "Conta criada! Verifica o teu email para confirmar o registo."
                 )
             except Exception as e:
-                st.error(signup_error_message(e))
+                feedback.error(signup_error_message(e))
 
 @st.dialog("Configurar habitacao")
 def popup_configuracao() -> None:
@@ -262,8 +328,9 @@ with col_buttons:
             if st.button("Entrar", use_container_width=True):
                 popup_login()
         else:
-            user_email = st.session_state.user.email
-            st.caption(f"👤 {user_email}")
+            user_label = resolve_user_name(st.session_state.user)
+            st.session_state.user_name = user_label
+            st.caption(f"{user_label}")
             if st.button("Sair", use_container_width=True):
                 supabase = get_supabase_client(authenticated=True)
                 if supabase is not None:
@@ -271,6 +338,7 @@ with col_buttons:
                 st.session_state.user = None
                 st.session_state.access_token = None
                 st.session_state.refresh_token = None
+                st.session_state.user_name = None
                 st.rerun()
 
     with btn_col2:

@@ -88,20 +88,10 @@ st.markdown(
 st.markdown(
     """
     ## 6) Nota metodologica sobre agregacao (300 clientes)
-    Neste trabalho, a modelacao foi feita sobre dados agregados de 300 clientes do dataset Ausgrid.
-    Esta abordagem melhora estabilidade estatistica e reduz ruido individual, mas perde granularidade
-    de comportamento por consumidor. Assim, os resultados devem ser interpretados ao nivel de perfil
-    energetico agregado e nao como previsao personalizada por cliente.
+    O modelo XGBoost foi utilizado para prever consumo energetico agregado com base em variaveis
+    temporais e historicas (lags). O desempenho foi avaliado por MAE, RMSE e R² em dados de teste.
+    A analise de importancia das variaveis permitiu identificar os principais fatores explicativos.
+    Como limitacao, o modelo opera sobre agregacao de 300 clientes, sendo os resultados representativos
+    de comportamento coletivo e nao individual.
     """
 )
-
-with st.expander("Texto curto para usar no relatorio"):
-    st.markdown(
-        """
-        O modelo XGBoost foi utilizado para prever consumo energetico agregado com base em variaveis
-        temporais e historicas (lags). O desempenho foi avaliado por MAE, RMSE e R² em dados de teste.
-        A analise de importancia das variaveis permitiu identificar os principais fatores explicativos.
-        Como limitacao, o modelo opera sobre agregacao de 300 clientes, sendo os resultados representativos
-        de comportamento coletivo e nao individual.
-        """
-    )
