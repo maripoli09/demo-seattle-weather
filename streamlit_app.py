@@ -9,7 +9,6 @@ from supabase import Client, create_client
 
 from tariffs import electricity_price
 from utils import (
-    LANGUAGES,
     estimate_solar_production,
     generate_recommendation,
     load_smart_models,
@@ -36,7 +35,25 @@ STATE_DEFAULTS = {
     "price_type": "Preço fixo",
     "num_solar_panels": 0,
     "panel_wattage": 400,
-    "language": "PT",
+}
+
+PT_TEXTS = {
+    "temp": "Temperatura",
+    "price": "Preço Atual",
+    "hourly_chart": "Horário Tarifário",
+    "forecast_section": "Previsão de Consumo (IA)",
+    "clouds_label": "Nebulosidade",
+    "wind_label": "Vento",
+    "rec_title": "Recomendações",
+    "footer": "Atualizado em",
+    "now_label": "Agora",
+    "chart_title": "Evolução do Preço da Eletricidade ao Longo do Dia",
+    "rec_low_price": "Preço baixo — Bom momento para utilizar eletricidade.",
+    "rec_high_price": "Preço elevado — Considera reduzir o consumo elétrico.",
+    "rec_high_solar": "Produção solar elevada — Recomenda-se o uso de energia solar.",
+    "rec_partial_solar": "Produção solar ativa mas insuficiente — Tenta reduzir o consumo para maximizar o autoconsumo.",
+    "rec_clouds": "Nebulosidade elevada — A produção solar pode ser reduzida.",
+    "rec_none": "Sem recomendações específicas neste momento.",
 }
 
 
@@ -109,8 +126,21 @@ def get_config() -> dict[str, Any]:
         "price_type": st.session_state.price_type,
         "num_solar_panels": st.session_state.num_solar_panels,
         "panel_wattage": st.session_state.panel_wattage,
-        "language": st.session_state.language,
     }
+
+
+def signup_error_message(error: Exception) -> str:
+    """Map common Supabase sign-up failures to user-friendly PT messages."""
+    raw_error = str(error).lower()
+
+    if "already" in raw_error or "exists" in raw_error or "registered" in raw_error:
+        return "Este email já está registado. Tenta iniciar sessão."
+    if "password" in raw_error and "6" in raw_error:
+        return "A palavra-passe deve ter pelo menos 6 caracteres."
+    if "invalid email" in raw_error or "email" in raw_error and "invalid" in raw_error:
+        return "O email introduzido não é válido."
+
+    return f"Erro ao criar conta: {error}"
 
 if "user" not in st.session_state:
     st.session_state.user = None
@@ -154,6 +184,13 @@ def popup_login() -> None:
 
     with col_register:
         if st.button("Criar conta", use_container_width=True):
+            if not email or not password:
+                st.error("Preenche o email e a palavra-passe para criar conta.")
+                return
+            if len(password) < 6:
+                st.error("A palavra-passe deve ter pelo menos 6 caracteres.")
+                return
+
             try:
                 response = supabase.auth.sign_up(
                     {"email": email, "password": password}
@@ -169,7 +206,7 @@ def popup_login() -> None:
                     "Conta criada! Verifica o teu email para confirmar o registo."
                 )
             except Exception as e:
-                st.error(f"Erro ao criar conta: {e}")
+                st.error(signup_error_message(e))
 
 @st.dialog("Configurar habitacao")
 def popup_configuracao() -> None:
@@ -215,8 +252,6 @@ def popup_configuracao() -> None:
 # --- Barra de topo ---
 col_title, col_buttons = st.columns([3, 1])
 
-with col_title:
-    st.title("Smart Energy Advisor")
 
 with col_buttons:
     btn_col1, btn_col2 = st.columns(2)
@@ -255,20 +290,6 @@ def render_header(t: dict[str, Any], city: str, now: datetime) -> None:
 - Configuracoes e historico
 """
     )
-
-
-def render_sidebar(language: str) -> str:
-    with st.sidebar:
-        st.title(LANGUAGES[language]["definitions"])
-        selected_language = st.selectbox(
-            LANGUAGES[language]["language_label"],
-            ["PT", "EN"],
-            index=safe_index(["PT", "EN"], st.session_state.language),
-        )
-        st.session_state.language = selected_language
-        st.divider()
-        st.write("Use as tabs para navegar pelas secções.")
-    return selected_language
 
 
 def weather_for_city(city: str) -> dict[str, Any] | None:
@@ -651,12 +672,14 @@ def render_settings_tab(city: str, cycle: str, price_type: str, num_solar_panels
 init_session_state()
 model, scaler, historical_data = load_all()
 config = get_config()
-selected_language = render_sidebar(config["language"])
-t = LANGUAGES[selected_language]
+t = PT_TEXTS
 
 if st.session_state.abrir_config:
-    st.session_state.abrir_config = False
-    popup_configuracao()
+    if st.session_state.get("user") is None:
+        popup_login()
+    else:
+        st.session_state.abrir_config = False
+        popup_configuracao()
 
 config = get_config()
 city = config["city"]
@@ -742,9 +765,6 @@ else:
 
 st.info(status_line)
 
-if st.button("Alterar configuracoes"):
-    st.session_state.abrir_config = True
-    st.rerun()
 
 current_tab, forecast_tab, simulator_tab, settings_tab = st.tabs(
     ["Resumo", "Previsao do dia", "Simulador", "Configuracoes"]
