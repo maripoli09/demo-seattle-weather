@@ -278,11 +278,14 @@ def popup_login() -> None:
 def popup_configuracao() -> None:
     st.subheader("Dados da habitacao")
 
-    st.session_state.city = st.selectbox(
-        "Cidade",
-        CITY_OPTIONS,
-        index=safe_index(CITY_OPTIONS, st.session_state.city),
+    city_input = st.text_input(
+        "Cidade (Portugal)",
+        value=st.session_state.city,
+        placeholder="Ex.: Braga, Aveiro, Viseu, Setubal",
+        help="Podes escrever qualquer cidade portuguesa.",
     )
+    if city_input.strip():
+        st.session_state.city = city_input.strip()
     st.session_state.cycle = st.selectbox(
         "Ciclo tarifario",
         CYCLE_OPTIONS,
@@ -317,6 +320,7 @@ def popup_configuracao() -> None:
 
 # --- Barra de topo ---
 col_title, col_buttons = st.columns([3, 1])
+dialog_opened = False
 
 
 with col_buttons:
@@ -327,6 +331,7 @@ with col_buttons:
         if st.session_state.get("user") is None:
             if st.button("Entrar", use_container_width=True):
                 popup_login()
+                dialog_opened = True
         else:
             user_label = resolve_user_name(st.session_state.user)
             st.session_state.user_name = user_label
@@ -344,6 +349,7 @@ with col_buttons:
     with btn_col2:
         if st.button("Configurar", use_container_width=True):
             popup_configuracao()
+            dialog_opened = True
 
 
 def render_header(t: dict[str, Any], city: str, now: datetime) -> None:
@@ -742,12 +748,14 @@ model, scaler, historical_data = load_all()
 config = get_config()
 t = PT_TEXTS
 
-if st.session_state.abrir_config:
+if st.session_state.abrir_config and not dialog_opened:
     if st.session_state.get("user") is None:
         popup_login()
+        dialog_opened = True
     else:
         st.session_state.abrir_config = False
         popup_configuracao()
+        dialog_opened = True
 
 config = get_config()
 city = config["city"]
