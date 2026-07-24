@@ -58,6 +58,50 @@ def make_prediction(model, scaler, historical_data, hour, day_of_week, month):
     return float(max(0, prediction[0]))
 
 
+def make_recursive_predictions(model, scaler, historical_data, timeline):
+    """
+    Recursive multi-step consumption forecast.
+
+    Each new prediction is appended to the working history and reused as lag_1
+    for the next step, producing a more realistic hour-to-hour curve.
+    """
+    if model is None or scaler is None or historical_data is None or len(timeline) == 0:
+        return [0.0] * len(timeline)
+
+    if "energy_kwh" not in historical_data.columns:
+        return [0.0] * len(timeline)
+
+    history_values = historical_data["energy_kwh"].dropna().tolist()
+    if not history_values:
+        return [0.0] * len(timeline)
+
+    predictions = []
+    cols_order = ["hour", "day_of_week", "month", "is_weekend", "lag_1", "lag_48"]
+
+    for hour, day_of_week, month in timeline:
+        lag_1 = history_values[-1]
+        lag_48 = history_values[-48] if len(history_values) >= 48 else lag_1
+
+        features = pd.DataFrame([
+            {
+                "hour": hour,
+                "day_of_week": day_of_week,
+                "month": month,
+                "is_weekend": 1 if day_of_week >= 5 else 0,
+                "lag_1": lag_1,
+                "lag_48": lag_48,
+            }
+        ])[cols_order]
+
+        features_scaled = scaler.transform(features)
+        prediction = float(max(0, model.predict(features_scaled)[0]))
+
+        predictions.append(prediction)
+        history_values.append(prediction)
+
+    return predictions
+
+
 def estimate_solar_production(
     num_panels,
     panel_wattage,

@@ -2,7 +2,6 @@ import importlib
 import re
 from datetime import datetime
 from typing import Any
-
 import pandas as pd
 import plotly.express as px
 import streamlit as st
@@ -25,6 +24,7 @@ from utils import (
     generate_recommendation,
     load_smart_models,
     make_prediction,
+    make_recursive_predictions,
 )
 from weather import future_weather, obtain_local_weather
 
@@ -476,22 +476,33 @@ def build_current_forecast_frame(
     if not weather_hourly_lookup:
         return pd.DataFrame(rows)
 
-    for forecast_hour in sorted(weather_hourly_lookup.keys()):
+    sorted_hours = sorted(weather_hourly_lookup.keys())
+    forecast_timeline = []
+    for forecast_hour in sorted_hours:
+        weather_row = weather_hourly_lookup[forecast_hour]
+        forecast_timeline.append(
+            (
+                int(forecast_hour),
+                int(weather_row["weekday"]),
+                int(weather_row["month"]),
+            )
+        )
+
+    recursive_consumptions = make_recursive_predictions(
+        model,
+        scaler,
+        historical_data,
+        forecast_timeline,
+    )
+
+    for idx, forecast_hour in enumerate(sorted_hours):
         weather_row = weather_hourly_lookup[forecast_hour]
         forecast_clouds = float(weather_row["clouds"])
         forecast_temp = weather_row["temp"]
         forecast_description = weather_row["description"]
         forecast_weekday = int(weather_row["weekday"])
         forecast_month = int(weather_row["month"])
-
-        consumption = make_prediction(
-            model,
-            scaler,
-            historical_data,
-            forecast_hour,
-            forecast_weekday,
-            forecast_month,
-        )
+        consumption = recursive_consumptions[idx]
         production = estimate_solar_production(
             num_solar_panels,
             panel_wattage,
@@ -546,10 +557,23 @@ def build_energy_frame(
 ) -> pd.DataFrame:
     rows: list[dict[str, Any]] = []
 
+    energy_timeline = []
     for i in range(24):
         h = (hour + i) % 24
         d = (weekday + ((hour + i) // 24)) % 7
-        consumption_h = make_prediction(model, scaler, historical_data, h, d, month)
+        energy_timeline.append((h, d, month))
+
+    recursive_consumptions = make_recursive_predictions(
+        model,
+        scaler,
+        historical_data,
+        energy_timeline,
+    )
+
+    for i in range(24):
+        h = (hour + i) % 24
+        d = (weekday + ((hour + i) // 24)) % 7
+        consumption_h = recursive_consumptions[i]
         clouds_h = weather_clouds_by_hour.get(h, fallback_clouds)
         temp_h = weather_temp_by_hour.get(h, fallback_temp)
         production_h = estimate_solar_production(
@@ -765,7 +789,6 @@ cloud_coverage = weather["clouds"] if weather else 0
 current_temp = weather.get("temperature") if weather else None
 
 price = electricity_price(hour, weekday, cycle, price_type)
-predicted_consumption = make_prediction(model, scaler, historical_data, hour, weekday, month)
 predicted_production = estimate_solar_production(
     num_solar_panels,
     panel_wattage,
@@ -773,7 +796,6 @@ predicted_production = estimate_solar_production(
     hour=hour,
     temp_c=current_temp,
 )
-energy_balance = predicted_production - predicted_consumption
 
 weather_forecast = future_weather(city)
 forecast_clouds_by_hour: dict[int, float] = {}
@@ -816,6 +838,15 @@ energy_24h = build_energy_frame(
     cloud_coverage,
     current_temp,
 )
+
+if not energy_24h.empty:
+    # Keep the "now" card consistent with the recursive 24h simulation baseline.
+    predicted_consumption = float(energy_24h.iloc[0]["Consumo_previsto"])
+    predicted_production = float(energy_24h.iloc[0]["Producao_solar"])
+else:
+    predicted_consumption = make_prediction(model, scaler, historical_data, hour, weekday, month)
+
+energy_balance = predicted_production - predicted_consumption
 
 render_header(t, city, now)
 
