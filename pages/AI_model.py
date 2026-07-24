@@ -275,7 +275,7 @@ fig = px.bar(
 )
 st.plotly_chart(fig, use_container_width=True)
 
-st.caption("Quanto maior a barra, maior o impacto da variável na previsão final do consumo.")
+st.info("Quanto maior a barra, maior o impacto da variável na previsão final do consumo.")
 
 st.markdown(
     """
