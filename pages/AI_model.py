@@ -245,8 +245,8 @@ else:
     st.markdown(
         f"""
         **Leitura rápida dos resultados:**
-        No **teste global**, o modelo apresenta MAE de **{global_mae:.4f} kWh** (MAPE **{global_mape:.2f}%**).
-        Na **janela atual**, o MAE é **{window_mae:.4f} kWh** (MAPE **{window_mape:.2f}%**) e está **{comp_text}**.
+        No **teste global**, o modelo apresenta um desempenho consistente, com MAE de **{global_mae:.4f} kWh** e MAPE de **{global_mape:.2f}%**.
+        Na **janela recente de 3 dias**, o erro mantém-se próximo deste valor, com MAE de **{window_mae:.4f} kWh** e MAPE de **{window_mape:.2f}%**, ficando **{comp_text}** face ao baseline de persistência.
         """
     )
 
