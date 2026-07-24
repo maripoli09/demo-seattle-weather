@@ -1011,5 +1011,4 @@ with simulator_tab:
 with settings_tab:
     render_settings_tab(city, cycle, price_type, num_solar_panels, panel_wattage)
 
-with st.bottom:
-    st.caption("Smart Energy Advisor © 2026 | Powered by XGBoost + OpenWeatherMap")
+st.caption("Smart Energy Advisor © 2026 | Powered by XGBoost + OpenWeatherMap")
