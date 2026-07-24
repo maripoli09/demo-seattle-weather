@@ -126,6 +126,101 @@ c3.metric("Desvio padrao", f"{df[cons_col].std():.3f} kWh")
 
 st.divider()
 
+st.subheader("Perfil energético diário completo (GC, GG e CL)")
+
+if cat_col is not None:
+    profile_df = df[["hora", cat_col, cons_col]].copy()
+    profile_df["_cat_norm"] = (
+        profile_df[cat_col]
+        .astype(str)
+        .str.upper()
+        .str.extract(r"(GC|GG|CL)", expand=False)
+    )
+
+    label_map = {
+        "GC": "Consumo Geral (GC)",
+        "GG": "Producao Solar (GG)",
+        "CL": "Cargas Controladas (CL)",
+    }
+    color_map = {
+        "Consumo Geral (GC)": "#2563EB",
+        "Producao Solar (GG)": "#F59E0B",
+        "Cargas Controladas (CL)": "#16A34A",
+    }
+
+    profile_df = profile_df[profile_df["_cat_norm"].isin(label_map.keys())]
+
+    if not profile_df.empty:
+        profile_hourly = (
+            profile_df.groupby(["hora", "_cat_norm"], as_index=False)[cons_col]
+            .mean()
+        )
+        profile_hourly["Serie"] = profile_hourly["_cat_norm"].map(label_map)
+
+        chart_profile = (
+            alt.Chart(profile_hourly)
+            .mark_line(point=True, strokeWidth=2.5)
+            .encode(
+                x=alt.X("hora:Q", title="Hora do dia", scale=alt.Scale(domain=[0, 23])),
+                y=alt.Y(f"{cons_col}:Q", title="Energia media (kWh)"),
+                color=alt.Color(
+                    "Serie:N",
+                    scale=alt.Scale(
+                        domain=list(color_map.keys()),
+                        range=list(color_map.values()),
+                    ),
+                    title="Serie",
+                ),
+                tooltip=[
+                    alt.Tooltip("hora:Q", title="Hora"),
+                    alt.Tooltip("Serie:N", title="Serie"),
+                    alt.Tooltip(f"{cons_col}:Q", title="kWh", format=".4f"),
+                ],
+            )
+            .properties(height=360)
+        )
+        st.altair_chart(chart_profile, use_container_width=True)
+
+        gc_profile = profile_hourly[profile_hourly["_cat_norm"] == "GC"]
+        if not gc_profile.empty:
+            madrugada = gc_profile[(gc_profile["hora"] >= 0) & (gc_profile["hora"] <= 6)]
+            manha = gc_profile[(gc_profile["hora"] >= 6) & (gc_profile["hora"] <= 12)]
+            noite = gc_profile[(gc_profile["hora"] >= 17) & (gc_profile["hora"] <= 23)]
+
+            if not madrugada.empty:
+                min_madrugada_h = int(madrugada.loc[madrugada[cons_col].idxmin(), "hora"])
+            else:
+                min_madrugada_h = int(gc_profile.loc[gc_profile[cons_col].idxmin(), "hora"])
+
+            if not manha.empty:
+                pico_manha_h = int(manha.loc[manha[cons_col].idxmax(), "hora"])
+            else:
+                pico_manha_h = int(gc_profile.loc[gc_profile[cons_col].idxmax(), "hora"])
+
+            if not noite.empty:
+                pico_noite_h = int(noite.loc[noite[cons_col].idxmax(), "hora"])
+            else:
+                pico_noite_h = int(gc_profile.loc[gc_profile[cons_col].idxmax(), "hora"])
+
+            st.markdown(
+                f"""
+                Leituras principais no consumo agregado (GC):
+
+                - minimo de madrugada por volta das **{min_madrugada_h:02d}h**;
+                - pico matinal por volta das **{pico_manha_h:02d}h**;
+                - pico de final de tarde/noite por volta das **{pico_noite_h:02d}h**.
+                """
+            )
+    else:
+        st.info(
+            "Nao foram encontradas categorias GC/GG/CL nos dados filtrados para montar o perfil completo."
+        )
+else:
+    st.info(
+        "Este dataset da app (df_gc_clean.pkl) representa consumo agregado e nao inclui categorias GC/GG/CL. "
+        "Se carregares um dataset com coluna de categoria, o grafico completo de 3 curvas aparece automaticamente."
+    )
+
 # 1) Consumo medio por hora
 st.subheader("1) Consumo médio por hora")
 by_hour = df.groupby("hora", as_index=False)[cons_col].mean()
