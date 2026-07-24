@@ -90,6 +90,12 @@ def get_supabase_client(authenticated: bool = False) -> Any | None:
     return supabase
 
 
+def is_supabase_available() -> bool:
+    return create_client is not None and bool(st.secrets.get("SUPABASE_URL")) and bool(
+        st.secrets.get("SUPABASE_KEY")
+    )
+
+
 def save_simulation(payload: dict[str, Any]) -> tuple[bool, str]:
     try:
         supabase = get_supabase_client(authenticated=True)
@@ -225,7 +231,10 @@ def popup_login() -> None:
 
     supabase = get_supabase_client()
     if supabase is None:
-        st.error("Supabase não configurado.")
+        st.info(
+            "Login e histórico estão indisponíveis neste deploy. "
+            "Configura SUPABASE_URL e SUPABASE_KEY nos secrets para ativar estas funções."
+        )
         return
 
     email = st.text_input("Email")
@@ -350,9 +359,12 @@ with col_buttons:
     with btn_col1:
         # Mostrar botão de login ou de logout consoante o estado
         if st.session_state.get("user") is None:
-            if st.button("Entrar", use_container_width=True):
-                popup_login()
-                dialog_opened = True
+            if is_supabase_available():
+                if st.button("Entrar", use_container_width=True):
+                    popup_login()
+                    dialog_opened = True
+            else:
+                st.caption("Login indisponível")
         else:
             user_label = resolve_user_name(st.session_state.user)
             st.session_state.user_name = user_label
@@ -764,8 +776,13 @@ t = PT_TEXTS
 
 if st.session_state.abrir_config and not dialog_opened:
     if st.session_state.get("user") is None:
-        popup_login()
-        dialog_opened = True
+        if is_supabase_available():
+            popup_login()
+            dialog_opened = True
+        else:
+            st.session_state.abrir_config = False
+            popup_configuracao()
+            dialog_opened = True
     else:
         st.session_state.abrir_config = False
         popup_configuracao()
@@ -841,6 +858,12 @@ energy_24h = build_energy_frame(
 )
 
 render_header(t, city, now)
+
+if not is_supabase_available():
+    st.info(
+        "O simulador está funcional, mas login, histórico e guardar cenários estão desativados "
+        "porque o Supabase não está configurado neste deploy."
+    )
 
 if predicted_production > predicted_consumption:
     status_line = "A producao solar esta a cobrir parte do consumo."

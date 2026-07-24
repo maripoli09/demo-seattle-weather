@@ -34,6 +34,12 @@ def get_supabase_client(authenticated: bool = False) -> Any | None:
 
     return supabase
 
+
+def is_supabase_available() -> bool:
+    return create_client is not None and bool(st.secrets.get("SUPABASE_URL")) and bool(
+        st.secrets.get("SUPABASE_KEY")
+    )
+
 def fetch_simulations(limit: int = 200, client_id: str | None = None):
     if not client_id:
         return None, "Sessão inválida. Inicia sessão para consultar o histórico."
@@ -64,7 +70,11 @@ def fetch_simulations(limit: int = 200, client_id: str | None = None):
 current_user = st.session_state.get("user")
 current_user_id = getattr(current_user, "id", None)
 
-if current_user_id is None:
+if not is_supabase_available():
+    st.warning(
+        "Histórico indisponível neste deploy. Configura SUPABASE_URL e SUPABASE_KEY nos secrets para ativá-lo."
+    )
+elif current_user_id is None:
     st.warning("Para consultar o histórico, inicia sessão na página principal.")
 else:
     limit = st.slider("Número de simulações", min_value=10, max_value=200, value=50, step=10)
