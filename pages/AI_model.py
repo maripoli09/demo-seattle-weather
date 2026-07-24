@@ -127,7 +127,7 @@ else:
         x=x_axis,
         y="kWh",
         color="Serie",
-        title="Consumo real vs previsão do modelo (janela recente)",
+        title="Consumo real vs previsão do modelo",
         color_discrete_map={
             "Consumo real (kWh)": "#2563EB",
             "Previsao XGBoost (kWh)": "#F59E0B",
