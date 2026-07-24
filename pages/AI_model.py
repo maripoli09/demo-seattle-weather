@@ -108,6 +108,13 @@ else:
     plot_sample = real_vs_pred.copy()
     x_axis = "Timestamp" if "Timestamp" in plot_sample.columns else "Index"
 
+    if x_axis == "Timestamp":
+        ts_max = plot_sample["Timestamp"].max()
+        cutoff = ts_max - pd.Timedelta(days=3)
+        recent = plot_sample[plot_sample["Timestamp"] >= cutoff].copy()
+        if not recent.empty:
+            plot_sample = recent
+
     line_df = plot_sample.melt(
         id_vars=[x_axis],
         value_vars=["Consumo real (kWh)", "Previsao XGBoost (kWh)"],
@@ -120,13 +127,15 @@ else:
         x=x_axis,
         y="kWh",
         color="Serie",
-        title="Consumo real vs previsão do modelo (conjunto de teste)",
+        title="Consumo real vs previsão do modelo (janela recente)",
         color_discrete_map={
             "Consumo real (kWh)": "#2563EB",
             "Previsao XGBoost (kWh)": "#F59E0B",
         },
     )
     st.plotly_chart(fig_compare, use_container_width=True)
+    if x_axis == "Timestamp":
+        st.caption("A visualização mostra, por defeito, os últimos 3 dias do conjunto de teste.")
 
 st.markdown("## 5) Importância das variáveis")
 
