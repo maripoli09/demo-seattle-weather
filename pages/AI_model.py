@@ -152,8 +152,6 @@ def build_real_vs_pred_df() -> pd.DataFrame:
 
 st.markdown("## 4) Comparação: consumo real vs previsão XGBoost")
 st.caption(
-    "A linha azul representa o consumo real e a laranja a previsão do modelo. "
-    
     "Quanto mais próximas estiverem, melhor o desempenho preditivo."
 )
 
