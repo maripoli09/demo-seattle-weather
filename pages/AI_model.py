@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.express as px
 import numpy as np
 
-from utils import load_smart_models
+from utils import FEATURE_COLS, load_smart_models, predict_consumption_batch, resolve_model_input_mode
 
 st.set_page_config(page_title="Modelo IA", layout="wide")
 st.title("Modelo de IA")
@@ -41,21 +41,64 @@ features_df = pd.DataFrame(
 )
 st.dataframe(features_df, use_container_width=True)
 
+@st.cache_data
+def compute_test_metrics() -> dict | None:
+    model, scaler, historical_data = load_smart_models()
+    if model is None or scaler is None or historical_data is None:
+        return None
+
+    required_cols = FEATURE_COLS + ["energy_kwh"]
+    if any(col not in historical_data.columns for col in required_cols):
+        return None
+
+    df_model = historical_data.dropna(subset=required_cols).copy()
+    if df_model.empty:
+        return None
+
+    split_point = int(len(df_model) * 0.8)
+    test = df_model.iloc[split_point:].copy()
+    if test.empty:
+        return None
+
+    X_test = test[FEATURE_COLS]
+    y_true = test["energy_kwh"].to_numpy(dtype=float)
+    y_pred = predict_consumption_batch(model, scaler, X_test, historical_data)
+
+    mae = float(np.mean(np.abs(y_true - y_pred)))
+    rmse = float(np.sqrt(np.mean((y_true - y_pred) ** 2)))
+
+    y_mean = float(np.mean(y_true))
+    ss_res = float(np.sum((y_true - y_pred) ** 2))
+    ss_tot = float(np.sum((y_true - y_mean) ** 2))
+    r2 = float(1 - ss_res / ss_tot) if ss_tot > 0 else 0.0
+
+    nonzero_mask = y_true != 0
+    if np.any(nonzero_mask):
+        mape = float(np.mean(np.abs((y_true[nonzero_mask] - y_pred[nonzero_mask]) / y_true[nonzero_mask])) * 100)
+    else:
+        mape = 0.0
+
+    return {
+        "mae": mae,
+        "rmse": rmse,
+        "r2": r2,
+        "mape": mape,
+    }
+
+
 st.markdown("## 3) Métricas de desempenho (teste)")
 
-# TODO: substituir pelos valores reais do notebook
-mae_real = 0.0157
-rmse_real = 0.0218
-r2_real = 0.9799
-mape_real = 4.28
+metrics = compute_test_metrics()
+if metrics is None:
+    st.warning("Nao foi possivel calcular as métricas automaticamente com os artefactos atuais.")
+else:
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("MAE", f"{metrics['mae']:.4f}")
+    m2.metric("RMSE", f"{metrics['rmse']:.4f}")
+    m3.metric("R²", f"{metrics['r2']:.4f}")
+    m4.metric("MAPE", f"{metrics['mape']:.2f}%")
 
-m1, m2, m3, m4 = st.columns(4)
-m1.metric("MAE", f"{mae_real:.4f}")
-m2.metric("RMSE", f"{rmse_real:.4f}")
-m3.metric("R²", f"{r2_real:.4f}")
-m4.metric("MAPE", f"{mape_real:.2f}%")
-
-st.caption("Valores atuais do experimento de referência. Atualiza estes indicadores sempre que treinares uma nova versão do modelo.")
+    st.caption("Métricas calculadas automaticamente no conjunto de teste (últimos 20% da série).")
 
 
 @st.cache_data
@@ -64,7 +107,7 @@ def build_real_vs_pred_df() -> pd.DataFrame:
     if model is None or scaler is None or historical_data is None:
         return pd.DataFrame()
 
-    required_cols = ["hour", "day_of_week", "month", "is_weekend", "lag_1", "lag_48", "energy_kwh"]
+    required_cols = FEATURE_COLS + ["energy_kwh"]
     if any(col not in historical_data.columns for col in required_cols):
         return pd.DataFrame()
 
@@ -79,11 +122,11 @@ def build_real_vs_pred_df() -> pd.DataFrame:
 
     train = df_model.iloc[:split_point].copy()
 
-    X_test = test[["hour", "day_of_week", "month", "is_weekend", "lag_1", "lag_48"]]
+    X_test = test[FEATURE_COLS]
     y_test = test["energy_kwh"].astype(float)
 
-    X_test_scaled = scaler.transform(X_test)
-    y_pred = np.clip(model.predict(X_test_scaled), a_min=0, a_max=None)
+    input_mode = resolve_model_input_mode(model, scaler, historical_data)
+    y_pred = predict_consumption_batch(model, scaler, X_test, historical_data)
 
     baseline = y_test.shift(1)
     baseline_fill = float(train["energy_kwh"].iloc[-1]) if not train.empty else float(y_test.mean())
@@ -95,6 +138,7 @@ def build_real_vs_pred_df() -> pd.DataFrame:
             "Consumo real (kWh)": y_test.values,
             "Previsao XGBoost (kWh)": y_pred,
             "Baseline persistencia (kWh)": baseline.values,
+            "Input mode": input_mode,
         }
     )
 
@@ -178,6 +222,7 @@ else:
         },
     )
     st.plotly_chart(fig_compare, use_container_width=True)
+    st.caption(f"Modo de entrada detetado automaticamente para o modelo: **{plot_sample['Input mode'].iloc[0]}**")
 
     c1, c2, c3 = st.columns(3)
     c1.metric("MAE - teste global", f"{global_mae:.4f} kWh")

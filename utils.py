@@ -6,6 +6,10 @@ import math
 from datetime import datetime, timedelta
 
 
+FEATURE_COLS = ["hour", "day_of_week", "month", "is_weekend", "lag_1", "lag_48"]
+_DEFAULT_INPUT_MODE = "scaled"
+
+
 def _safe_load_pkl(path):
     """Load .pkl files serialized either with pickle or joblib."""
     try:
@@ -28,6 +32,78 @@ def load_smart_models():
     except Exception as e:
         print(f"Error loading .pkl files: {e}")
         return None, None, None
+
+
+def _mae(y_true, y_pred):
+    y_true_np = np.asarray(y_true, dtype=float)
+    y_pred_np = np.asarray(y_pred, dtype=float)
+    return float(np.mean(np.abs(y_true_np - y_pred_np)))
+
+
+def _predict_with_mode(model, scaler, X: pd.DataFrame, mode: str):
+    if mode == "scaled" and scaler is not None:
+        return model.predict(scaler.transform(X))
+    return model.predict(X)
+
+
+def resolve_model_input_mode(model, scaler, historical_data) -> str:
+    """
+    Detect whether the serialized model expects scaled or raw features.
+
+    We score both paths on a recent holdout slice from historical_data and keep
+    the one with lower MAE. Result is cached in DataFrame attrs.
+    """
+    if historical_data is None or not isinstance(historical_data, pd.DataFrame):
+        return _DEFAULT_INPUT_MODE
+
+    cached_mode = historical_data.attrs.get("_model_input_mode")
+    if cached_mode in {"scaled", "raw"}:
+        return cached_mode
+
+    required_cols = FEATURE_COLS + ["energy_kwh"]
+    if any(col not in historical_data.columns for col in required_cols):
+        historical_data.attrs["_model_input_mode"] = _DEFAULT_INPUT_MODE
+        return _DEFAULT_INPUT_MODE
+
+    df_eval = historical_data.dropna(subset=required_cols).copy()
+    if len(df_eval) < 200:
+        historical_data.attrs["_model_input_mode"] = _DEFAULT_INPUT_MODE
+        return _DEFAULT_INPUT_MODE
+
+    split_point = int(len(df_eval) * 0.8)
+    test = df_eval.iloc[split_point:].tail(min(1000, max(100, len(df_eval) - split_point)))
+    if test.empty:
+        historical_data.attrs["_model_input_mode"] = _DEFAULT_INPUT_MODE
+        return _DEFAULT_INPUT_MODE
+
+    X_eval = test[FEATURE_COLS]
+    y_eval = test["energy_kwh"]
+
+    mae_scaled = float("inf")
+    mae_raw = float("inf")
+
+    try:
+        pred_scaled = np.clip(_predict_with_mode(model, scaler, X_eval, "scaled"), a_min=0, a_max=None)
+        mae_scaled = _mae(y_eval, pred_scaled)
+    except Exception:
+        pass
+
+    try:
+        pred_raw = np.clip(_predict_with_mode(model, scaler, X_eval, "raw"), a_min=0, a_max=None)
+        mae_raw = _mae(y_eval, pred_raw)
+    except Exception:
+        pass
+
+    mode = "scaled" if mae_scaled <= mae_raw else "raw"
+    historical_data.attrs["_model_input_mode"] = mode
+    return mode
+
+
+def predict_consumption_batch(model, scaler, X: pd.DataFrame, historical_data) -> np.ndarray:
+    """Predict using the automatically resolved input mode for the current model."""
+    mode = resolve_model_input_mode(model, scaler, historical_data)
+    preds = _predict_with_mode(model, scaler, X, mode)
+    return np.clip(np.asarray(preds, dtype=float), a_min=0, a_max=None)
     
 def make_prediction(model, scaler, historical_data, hour, day_of_week, month):
     """
@@ -49,11 +125,8 @@ def make_prediction(model, scaler, historical_data, hour, day_of_week, month):
     }])
 
 
-    cols_order =['hour', 'day_of_week', 'month', 'is_weekend', 'lag_1', 'lag_48']
-    features = features[cols_order]
-
-    features_scaled = scaler.transform(features)
-    prediction = model.predict(features_scaled)
+    features = features[FEATURE_COLS]
+    prediction = predict_consumption_batch(model, scaler, features, historical_data)
 
     return float(max(0, prediction[0]))
 
@@ -76,7 +149,7 @@ def make_recursive_predictions(model, scaler, historical_data, timeline):
         return [0.0] * len(timeline)
 
     predictions = []
-    cols_order = ["hour", "day_of_week", "month", "is_weekend", "lag_1", "lag_48"]
+    mode = resolve_model_input_mode(model, scaler, historical_data)
 
     for hour, day_of_week, month in timeline:
         lag_1 = history_values[-1]
@@ -91,10 +164,9 @@ def make_recursive_predictions(model, scaler, historical_data, timeline):
                 "lag_1": lag_1,
                 "lag_48": lag_48,
             }
-        ])[cols_order]
+        ])[FEATURE_COLS]
 
-        features_scaled = scaler.transform(features)
-        prediction = float(max(0, model.predict(features_scaled)[0]))
+        prediction = float(max(0, _predict_with_mode(model, scaler, features, mode)[0]))
 
         predictions.append(prediction)
         history_values.append(prediction)
