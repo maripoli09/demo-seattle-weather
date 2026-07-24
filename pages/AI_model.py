@@ -97,4 +97,4 @@ st.markdown(
     """
 )
 
-st.success("Resumo rápido: o modelo é adequado para apoiar decisões operacionais e recomendações contextuais no produto.")
+st.success("O modelo é adequado para apoiar decisões operacionais e recomendações contextuais no produto.")
