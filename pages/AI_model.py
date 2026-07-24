@@ -105,16 +105,7 @@ real_vs_pred = build_real_vs_pred_df()
 if real_vs_pred.empty:
     st.warning("Nao foi possivel gerar o grafico de comparação com os artefactos atuais.")
 else:
-    max_points = min(1000, len(real_vs_pred))
-    points_to_show = st.slider(
-        "N.º de pontos no gráfico",
-        min_value=100,
-        max_value=max_points,
-        value=min(300, max_points),
-        step=50,
-    )
-
-    plot_sample = real_vs_pred.tail(points_to_show).copy()
+    plot_sample = real_vs_pred.copy()
     x_axis = "Timestamp" if "Timestamp" in plot_sample.columns else "Index"
 
     line_df = plot_sample.melt(
@@ -136,7 +127,6 @@ else:
         },
     )
     st.plotly_chart(fig_compare, use_container_width=True)
-    st.caption("Azul = consumo real | Laranja = previsão do XGBoost")
 
 st.markdown("## 5) Importância das variáveis")
 
