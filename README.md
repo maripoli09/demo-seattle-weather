@@ -29,3 +29,17 @@ Just an example Streamlit dashboard exploring the classic Seattle Weather datase
     ```sh
     $ streamlit run streamlit_app.py
     ```
+
+## Streamlit Cloud configuration
+
+To enable login, saved scenarios, and history in Streamlit Cloud, set these app secrets:
+
+```toml
+SUPABASE_URL = "https://YOUR-PROJECT.supabase.co"
+SUPABASE_KEY = "YOUR_SUPABASE_ANON_OR_SERVICE_KEY"
+OPENWEATHER_API_KEY = "YOUR_OPENWEATHER_API_KEY"
+```
+
+In Streamlit Cloud, open your app, then go to `Settings` -> `Secrets` and paste the values above.
+
+The app also accepts the same values as environment variables when running outside Streamlit Cloud.

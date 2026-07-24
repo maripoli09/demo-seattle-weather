@@ -1,12 +1,14 @@
 import requests
 import streamlit as st
 
+from config import get_openweather_api_key
+
 def obtain_local_weather(city="Lisboa"):
     """
     Obtain weather information for a specific city using the OpenWeatherMap API. Obtém informações meteorológicas para uma cidade específica usando a API OpenWeatherMap.
 
     """
-    api_key = st.secrets.get("OPENWEATHER_API_KEY")
+    api_key = get_openweather_api_key()
     if not api_key:
         return None
 
@@ -37,7 +39,7 @@ def future_weather(city="Lisboa"):
     """
     Obtain weather forecasts for a specific city using the OpenWeatherMap API. Obtém previsões meteorológicas para uma cidade específica usando a API OpenWeatherMap.
     """
-    api_key = st.secrets.get("OPENWEATHER_API_KEY")
+    api_key = get_openweather_api_key()
     if not api_key:
         return None
 

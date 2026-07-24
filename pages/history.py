@@ -8,6 +8,8 @@ try:
 except ModuleNotFoundError:
     create_client = None
 
+from config import get_supabase_key, get_supabase_url
+
 st.set_page_config(page_title="Historico de Simulacoes", layout="wide")
 st.title("Historico de Simulacoes")
 st.caption(
@@ -18,8 +20,8 @@ def get_supabase_client(authenticated: bool = False) -> Any | None:
     if create_client is None:
         return None
 
-    url = st.secrets.get("SUPABASE_URL")
-    key = st.secrets.get("SUPABASE_KEY")
+    url = get_supabase_url()
+    key = get_supabase_key()
 
     if not url or not key:
         return None
@@ -36,9 +38,7 @@ def get_supabase_client(authenticated: bool = False) -> Any | None:
 
 
 def is_supabase_available() -> bool:
-    return create_client is not None and bool(st.secrets.get("SUPABASE_URL")) and bool(
-        st.secrets.get("SUPABASE_KEY")
-    )
+    return create_client is not None and bool(get_supabase_url()) and bool(get_supabase_key())
 
 def fetch_simulations(limit: int = 200, client_id: str | None = None):
     if not client_id:

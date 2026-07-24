@@ -12,6 +12,8 @@ try:
 except ModuleNotFoundError:
     create_client = None
 
+from config import get_supabase_key, get_supabase_url
+
 from tariffs import electricity_price
 from utils import (
     estimate_solar_production,
@@ -71,8 +73,8 @@ def get_supabase_client(authenticated: bool = False) -> Any | None:
     if create_client is None:
         return None
 
-    url = st.secrets.get("SUPABASE_URL")
-    key = st.secrets.get("SUPABASE_KEY")
+    url = get_supabase_url()
+    key = get_supabase_key()
     if not url or not key:
         return None
 
@@ -91,9 +93,20 @@ def get_supabase_client(authenticated: bool = False) -> Any | None:
 
 
 def is_supabase_available() -> bool:
-    return create_client is not None and bool(st.secrets.get("SUPABASE_URL")) and bool(
-        st.secrets.get("SUPABASE_KEY")
-    )
+    return create_client is not None and bool(get_supabase_url()) and bool(get_supabase_key())
+
+
+def get_supabase_status_message() -> str:
+    if create_client is None:
+        return "O pacote Python `supabase` não foi instalado neste deploy."
+    if not get_supabase_url():
+        return "Falta configurar a URL do Supabase. Aceita `SUPABASE_URL` ou `[supabase].url`."
+    if not get_supabase_key():
+        return (
+            "Falta configurar a chave do Supabase. Aceita `SUPABASE_KEY`, `SUPABASE_ANON_KEY`, "
+            "`SUPABASE_PUBLISHABLE_KEY` ou `[supabase].key`."
+        )
+    return "Supabase configurado."
 
 
 def save_simulation(payload: dict[str, Any]) -> tuple[bool, str]:
@@ -233,7 +246,7 @@ def popup_login() -> None:
     if supabase is None:
         st.info(
             "Login e histórico estão indisponíveis neste deploy. "
-            "Configura SUPABASE_URL e SUPABASE_KEY nos secrets para ativar estas funções."
+            f"{get_supabase_status_message()}"
         )
         return
 
@@ -862,7 +875,7 @@ render_header(t, city, now)
 if not is_supabase_available():
     st.info(
         "O simulador está funcional, mas login, histórico e guardar cenários estão desativados "
-        "porque o Supabase não está configurado neste deploy."
+        f"porque o Supabase não está configurado neste deploy. {get_supabase_status_message()}"
     )
 
 if predicted_production > predicted_consumption:

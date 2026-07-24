@@ -7,6 +7,8 @@ try:
 except ModuleNotFoundError:
     create_client = None
 
+from config import get_supabase_key, get_supabase_url
+
 
 AUTH_DEFAULTS = {
     "user": None,
@@ -28,8 +30,8 @@ def get_supabase_client(authenticated: bool = False) -> Any | None:
     if create_client is None:
         return None
 
-    url = st.secrets.get("SUPABASE_URL")
-    key = st.secrets.get("SUPABASE_KEY")
+    url = get_supabase_url()
+    key = get_supabase_key()
     if not url or not key:
         return None
 
