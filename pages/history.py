@@ -2,13 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from typing import Any
-
-try:
-    from supabase import create_client
-except ModuleNotFoundError:
-    create_client = None
-
-from config import get_supabase_key, get_supabase_url
+from supabase_http import fetch_simulations as fetch_simulations_rows, is_supabase_available
 
 st.set_page_config(page_title="Historico de Simulacoes", layout="wide")
 st.title("Historico de Simulacoes")
@@ -16,52 +10,16 @@ st.caption(
     "Compara cenários guardados e identifica rapidamente as combinações com maior poupança estimada."
 )
 
-def get_supabase_client(authenticated: bool = False) -> Any | None:
-    if create_client is None:
-        return None
-
-    url = get_supabase_url()
-    key = get_supabase_key()
-
-    if not url or not key:
-        return None
-
-    supabase = create_client(url, key)
-
-    if authenticated:
-        access_token = st.session_state.get("access_token")
-        if not access_token:
-            return None
-        supabase.postgrest.auth(access_token)
-
-    return supabase
-
-
-def is_supabase_available() -> bool:
-    return create_client is not None and bool(get_supabase_url()) and bool(get_supabase_key())
-
 def fetch_simulations(limit: int = 200, client_id: str | None = None):
     if not client_id:
         return None, "Sessão inválida. Inicia sessão para consultar o histórico."
 
-    supabase = get_supabase_client(authenticated=True)
-
-    if supabase is None:
+    access_token = st.session_state.get("access_token")
+    if not access_token or not is_supabase_available():
         return None, "Sessão inválida ou Supabase não configurado."
 
     try:
-        query = supabase.table("simulations").select("*")
-        if client_id:
-            query = query.eq("client_id", client_id)
-
-        res = (
-            query
-            .order("created_at", desc=True)
-            .limit(limit)
-            .execute()
-        )
-
-        data = res.data if hasattr(res, "data") else []
+        data = fetch_simulations_rows(limit, client_id, access_token)
         return data, None
     
     except Exception as e:

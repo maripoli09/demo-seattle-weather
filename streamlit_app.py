@@ -7,12 +7,17 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-try:
-    from supabase import create_client
-except ModuleNotFoundError:
-    create_client = None
-
 from config import get_supabase_key, get_supabase_url
+from supabase_http import (
+    fetch_profile_user_name,
+    get_supabase_status_message,
+    insert_simulation,
+    is_supabase_available,
+    sign_in_with_password,
+    sign_out,
+    sign_up,
+    upsert_profile,
+)
 
 from tariffs import electricity_price
 from utils import (
@@ -69,52 +74,12 @@ def load_all():
     return load_smart_models()
 
 
-def get_supabase_client(authenticated: bool = False) -> Any | None:
-    if create_client is None:
-        return None
-
-    url = get_supabase_url()
-    key = get_supabase_key()
-    if not url or not key:
-        return None
-
-    supabase = create_client(url, key)
-
-    if authenticated:
-        access_token = st.session_state.get("access_token")
-        refresh_token = st.session_state.get("refresh_token")
-
-        if not access_token or not refresh_token:
-            return None
-
-        supabase.auth.set_session(access_token, refresh_token)
-
-    return supabase
-
-
-def is_supabase_available() -> bool:
-    return create_client is not None and bool(get_supabase_url()) and bool(get_supabase_key())
-
-
-def get_supabase_status_message() -> str:
-    if create_client is None:
-        return "O pacote Python `supabase` não foi instalado neste deploy."
-    if not get_supabase_url():
-        return "Falta configurar a URL do Supabase. Aceita `SUPABASE_URL` ou `[supabase].url`."
-    if not get_supabase_key():
-        return (
-            "Falta configurar a chave do Supabase. Aceita `SUPABASE_KEY`, `SUPABASE_ANON_KEY`, "
-            "`SUPABASE_PUBLISHABLE_KEY` ou `[supabase].key`."
-        )
-    return "Supabase configurado."
-
-
 def save_simulation(payload: dict[str, Any]) -> tuple[bool, str]:
     try:
-        supabase = get_supabase_client(authenticated=True)
-        if supabase is None:
+        access_token = st.session_state.get("access_token")
+        if not access_token or not is_supabase_available():
             return False, "Sessao invalida ou Supabase nao configurado."
-        supabase.table("simulations").insert(payload).execute()
+        insert_simulation(payload, access_token)
         return True, "Simulation saved successfully."
     except Exception as e:
         return False, f"Error saving simulation: {e}"
@@ -125,8 +90,8 @@ def ensure_profile_exists() -> tuple[bool, str]:
     if user is None:
         return False, "Sessao invalida."
 
-    supabase = get_supabase_client(authenticated=True)
-    if supabase is None:
+    access_token = st.session_state.get("access_token")
+    if not access_token or not is_supabase_available():
         return False, "Sessao invalida ou Supabase nao configurado."
 
     try:
@@ -135,7 +100,7 @@ def ensure_profile_exists() -> tuple[bool, str]:
         if user_name:
             profile_payload["user_name"] = user_name
 
-        supabase.table("profiles").upsert(profile_payload, on_conflict="id").execute()
+        upsert_profile(profile_payload, access_token)
         return True, ""
     except Exception as e:
         return False, f"Erro ao garantir perfil: {e}"
@@ -206,21 +171,12 @@ def resolve_user_name(user: Any) -> str:
     if metadata_user_name and metadata_user_name != "utilizador":
         return metadata_user_name
 
-    supabase = get_supabase_client(authenticated=True)
-    if supabase is not None and getattr(user, "id", None):
+    access_token = st.session_state.get("access_token")
+    if access_token and getattr(user, "id", None) and is_supabase_available():
         try:
-            result = (
-                supabase.table("profiles")
-                .select("user_name")
-                .eq("id", user.id)
-                .limit(1)
-                .execute()
-            )
-            profile_rows = getattr(result, "data", []) or []
-            if profile_rows:
-                profile_user_name = (profile_rows[0].get("user_name") or "").strip()
-                if profile_user_name:
-                    return profile_user_name
+            profile_user_name = fetch_profile_user_name(user.id, access_token)
+            if profile_user_name:
+                return profile_user_name
         except Exception:
             pass
 
@@ -242,8 +198,7 @@ if "user_name" not in st.session_state:
 def popup_login() -> None:
     st.caption("Inicia sessão para guardares e consultares os teus cenários.")
 
-    supabase = get_supabase_client()
-    if supabase is None:
+    if not is_supabase_available():
         st.info(
             "Login e histórico estão indisponíveis neste deploy. "
             f"{get_supabase_status_message()}"
@@ -260,16 +215,16 @@ def popup_login() -> None:
     with col_login:
         if st.button("Entrar", use_container_width=True):
             try:
-                response = supabase.auth.sign_in_with_password(
-                    {"email": email, "password": password}
-                )
-                st.session_state.user = response.user
-                st.session_state.access_token = response.session.access_token
-                st.session_state.refresh_token = response.session.refresh_token
+                user, session = sign_in_with_password(email, password)
+                if user is None or session is None:
+                    raise RuntimeError("Authentication failed.")
+                st.session_state.user = user
+                st.session_state.access_token = session.access_token
+                st.session_state.refresh_token = session.refresh_token
                 if user_name_input.strip():
                     st.session_state.user_name = user_name_input.strip()
                 else:
-                    st.session_state.user_name = resolve_user_name(response.user)
+                    st.session_state.user_name = resolve_user_name(user)
                 ok_profile, profile_msg = ensure_profile_exists()
                 if not ok_profile:
                     feedback.warning(profile_msg)
@@ -296,17 +251,11 @@ def popup_login() -> None:
                 return
 
             try:
-                response = supabase.auth.sign_up(
-                    {
-                        "email": email,
-                        "password": password,
-                        "options": {"data": {"user_name": user_name_input.strip()}},
-                    }
-                )
-                if response.session is not None:
-                    st.session_state.user = response.user
-                    st.session_state.access_token = response.session.access_token
-                    st.session_state.refresh_token = response.session.refresh_token
+                user, session = sign_up(email, password, user_name_input.strip())
+                if session is not None and user is not None:
+                    st.session_state.user = user
+                    st.session_state.access_token = session.access_token
+                    st.session_state.refresh_token = session.refresh_token
                     st.session_state.user_name = user_name_input.strip()
                     ok_profile, profile_msg = ensure_profile_exists()
                     if not ok_profile:
@@ -383,9 +332,7 @@ with col_buttons:
             st.session_state.user_name = user_label
             st.caption(f"{user_label}")
             if st.button("Sair", use_container_width=True):
-                supabase = get_supabase_client(authenticated=True)
-                if supabase is not None:
-                    supabase.auth.sign_out()
+                sign_out(st.session_state.get("access_token"))
                 st.session_state.user = None
                 st.session_state.access_token = None
                 st.session_state.refresh_token = None

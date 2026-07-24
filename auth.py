@@ -2,12 +2,7 @@ from typing import Any
 
 import streamlit as st
 
-try:
-    from supabase import create_client
-except ModuleNotFoundError:
-    create_client = None
-
-from config import get_supabase_key, get_supabase_url
+from supabase_http import is_supabase_available, sign_in_with_password, sign_up, upsert_profile
 
 
 AUTH_DEFAULTS = {
@@ -27,24 +22,7 @@ def init_auth_state() -> None:
 
 def get_supabase_client(authenticated: bool = False) -> Any | None:
     """Return a Supabase client, optionally with user session attached."""
-    if create_client is None:
-        return None
-
-    url = get_supabase_url()
-    key = get_supabase_key()
-    if not url or not key:
-        return None
-
-    supabase = create_client(url, key)
-
-    if authenticated:
-        access_token = st.session_state.get("access_token")
-        refresh_token = st.session_state.get("refresh_token")
-        if not access_token or not refresh_token:
-            return None
-        supabase.auth.set_session(access_token, refresh_token)
-
-    return supabase
+    return None
 
 
 def ensure_profile_exists() -> tuple[bool, str]:
@@ -53,15 +31,13 @@ def ensure_profile_exists() -> tuple[bool, str]:
     if user is None:
         return False, "Invalid session."
 
-    supabase = get_supabase_client(authenticated=True)
-    if supabase is None:
+    access_token = st.session_state.get("access_token")
+    if not access_token or not is_supabase_available():
         return False, "Invalid session or Supabase is not configured."
 
     try:
         user_name = st.session_state.get("user_name") or "namename"
-        supabase.table("profiles").upsert(
-            {"id": user.id, "user_name": user_name}, on_conflict="id"
-        ).execute()
+        upsert_profile({"id": user.id, "user_name": user_name}, access_token)
         return True, ""
     except Exception as exc:
         return False, f"Error ensuring profile: {exc}"
@@ -72,30 +48,27 @@ def login(email: str, password: str) -> tuple[bool, str]:
     if not email or not password:
         return False, "Email and password are required."
 
-    supabase = get_supabase_client()
-    if supabase is None:
+    if not is_supabase_available():
         return False, "Supabase is not configured."
 
     try:
-        response = supabase.auth.sign_in_with_password(
-            {"email": email, "password": password}
-        )
+        user, session = sign_in_with_password(email, password)
 
-        if response.user is None or response.session is None:
+        if user is None or session is None:
             return False, "Authentication failed."
 
-        st.session_state.user = response.user
-        st.session_state.access_token = response.session.access_token
-        st.session_state.refresh_token = response.session.refresh_token
+        st.session_state.user = user
+        st.session_state.access_token = session.access_token
+        st.session_state.refresh_token = session.refresh_token
         st.session_state.user_name = (
-            getattr(response.user, "user_metadata", {}) or {}
+            getattr(user, "user_metadata", {}) or {}
         ).get("user_name", "namename")
 
         ok_profile, profile_msg = ensure_profile_exists()
         if not ok_profile:
             return False, profile_msg
 
-        return True, f"Welcome, {response.user.email}!"
+        return True, f"Welcome, {user.email}!"
     except Exception as exc:
         return False, f"Login error: {exc}"
 
@@ -105,23 +78,16 @@ def register(email: str, password: str) -> tuple[bool, str]:
     if not email or not password:
         return False, "Email and password are required."
 
-    supabase = get_supabase_client()
-    if supabase is None:
+    if not is_supabase_available():
         return False, "Supabase is not configured."
 
     try:
-        response = supabase.auth.sign_up(
-            {
-                "email": email,
-                "password": password,
-                "options": {"data": {"user_name": "namename"}},
-            }
-        )
+        user, session = sign_up(email, password, "namename")
 
-        if response.user is not None and response.session is not None:
-            st.session_state.user = response.user
-            st.session_state.access_token = response.session.access_token
-            st.session_state.refresh_token = response.session.refresh_token
+        if user is not None and session is not None:
+            st.session_state.user = user
+            st.session_state.access_token = session.access_token
+            st.session_state.refresh_token = session.refresh_token
             st.session_state.user_name = "namename"
             ensure_profile_exists()
 
