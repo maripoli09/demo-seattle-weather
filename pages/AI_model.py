@@ -77,17 +77,24 @@ def build_real_vs_pred_df() -> pd.DataFrame:
     if test.empty:
         return pd.DataFrame()
 
+    train = df_model.iloc[:split_point].copy()
+
     X_test = test[["hour", "day_of_week", "month", "is_weekend", "lag_1", "lag_48"]]
     y_test = test["energy_kwh"].astype(float)
 
     X_test_scaled = scaler.transform(X_test)
     y_pred = np.clip(model.predict(X_test_scaled), a_min=0, a_max=None)
 
+    baseline = y_test.shift(1)
+    baseline_fill = float(train["energy_kwh"].iloc[-1]) if not train.empty else float(y_test.mean())
+    baseline = baseline.fillna(baseline_fill)
+
     plot_df = pd.DataFrame(
         {
             "Index": range(len(test)),
             "Consumo real (kWh)": y_test.values,
             "Previsao XGBoost (kWh)": y_pred,
+            "Baseline persistencia (kWh)": baseline.values,
         }
     )
 
@@ -110,6 +117,20 @@ real_vs_pred = build_real_vs_pred_df()
 if real_vs_pred.empty:
     st.warning("Nao foi possivel gerar o grafico de comparação com os artefactos atuais.")
 else:
+    def calc_metrics(y_true: pd.Series, y_pred: pd.Series) -> tuple[float, float]:
+        y_true_np = y_true.to_numpy(dtype=float)
+        y_pred_np = y_pred.to_numpy(dtype=float)
+
+        mae = float(np.mean(np.abs(y_true_np - y_pred_np)))
+
+        mask = y_true_np != 0
+        if np.any(mask):
+            mape = float(np.mean(np.abs((y_true_np[mask] - y_pred_np[mask]) / y_true_np[mask])) * 100)
+        else:
+            mape = 0.0
+
+        return mae, mape
+
     plot_sample = real_vs_pred.copy()
     x_axis = "Timestamp" if "Timestamp" in plot_sample.columns else "Index"
 
@@ -119,6 +140,24 @@ else:
         recent = plot_sample[plot_sample["Timestamp"] >= cutoff].copy()
         if not recent.empty:
             plot_sample = recent
+
+    global_mae, global_mape = calc_metrics(
+        real_vs_pred["Consumo real (kWh)"],
+        real_vs_pred["Previsao XGBoost (kWh)"],
+    )
+    global_mae_baseline, global_mape_baseline = calc_metrics(
+        real_vs_pred["Consumo real (kWh)"],
+        real_vs_pred["Baseline persistencia (kWh)"],
+    )
+
+    window_mae, window_mape = calc_metrics(
+        plot_sample["Consumo real (kWh)"],
+        plot_sample["Previsao XGBoost (kWh)"],
+    )
+    window_mae_baseline, window_mape_baseline = calc_metrics(
+        plot_sample["Consumo real (kWh)"],
+        plot_sample["Baseline persistencia (kWh)"],
+    )
 
     line_df = plot_sample.melt(
         id_vars=[x_axis],
@@ -140,15 +179,29 @@ else:
     )
     st.plotly_chart(fig_compare, use_container_width=True)
 
-    mae_window = float(np.mean(np.abs(plot_sample["Consumo real (kWh)"] - plot_sample["Previsao XGBoost (kWh)"])))
-    mean_real = float(np.mean(plot_sample["Consumo real (kWh)"]))
-    mape_window = (mae_window / mean_real * 100) if mean_real > 0 else 0.0
+    c1, c2, c3 = st.columns(3)
+    c1.metric("MAE - teste global", f"{global_mae:.4f} kWh")
+    c2.metric("MAE - janela atual", f"{window_mae:.4f} kWh")
+    c3.metric("MAE baseline - janela", f"{window_mae_baseline:.4f} kWh")
+
+    c4, c5, c6 = st.columns(3)
+    c4.metric("MAPE - teste global", f"{global_mape:.2f}%")
+    c5.metric("MAPE - janela atual", f"{window_mape:.2f}%")
+    c6.metric("MAPE baseline - janela", f"{window_mape_baseline:.2f}%")
+
+    win_gain = window_mae_baseline - window_mae
+    if win_gain > 0:
+        comp_text = f"melhor que o baseline por {win_gain:.4f} kWh de MAE"
+    elif win_gain < 0:
+        comp_text = f"pior que o baseline por {abs(win_gain):.4f} kWh de MAE"
+    else:
+        comp_text = "equivalente ao baseline na janela"
 
     st.markdown(
         f"""
         **Leitura rápida dos resultados:**
-        Nesta janela, a previsão acompanha de forma consistente o padrão do consumo real, com erro médio absoluto de **{mae_window:.4f} kWh**
-        (aproximadamente **{mape_window:.2f}%** do consumo médio observado).
+        No **teste global**, o modelo apresenta MAE de **{global_mae:.4f} kWh** (MAPE **{global_mape:.2f}%**).
+        Na **janela atual**, o MAE é **{window_mae:.4f} kWh** (MAPE **{window_mape:.2f}%**) e está **{comp_text}**.
         """
     )
 
