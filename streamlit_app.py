@@ -6,7 +6,11 @@ from typing import Any
 import pandas as pd
 import plotly.express as px
 import streamlit as st
-from supabase import Client, create_client
+
+try:
+    from supabase import create_client
+except ModuleNotFoundError:
+    create_client = None
 
 from tariffs import electricity_price
 from utils import (
@@ -63,7 +67,10 @@ def load_all():
     return load_smart_models()
 
 
-def get_supabase_client(authenticated: bool = False) -> Client | None:
+def get_supabase_client(authenticated: bool = False) -> Any | None:
+    if create_client is None:
+        return None
+
     url = st.secrets.get("SUPABASE_URL")
     key = st.secrets.get("SUPABASE_KEY")
     if not url or not key:

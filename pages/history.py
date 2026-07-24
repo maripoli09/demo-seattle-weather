@@ -1,7 +1,12 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from supabase import create_client, Client
+from typing import Any
+
+try:
+    from supabase import create_client
+except ModuleNotFoundError:
+    create_client = None
 
 st.set_page_config(page_title="Historico de Simulacoes", layout="wide")
 st.title("Historico de Simulacoes")
@@ -9,7 +14,10 @@ st.caption(
     "Compara cenários guardados e identifica rapidamente as combinações com maior poupança estimada."
 )
 
-def get_supabase_client(authenticated: bool = False) -> Client | None:
+def get_supabase_client(authenticated: bool = False) -> Any | None:
+    if create_client is None:
+        return None
+
     url = st.secrets.get("SUPABASE_URL")
     key = st.secrets.get("SUPABASE_KEY")
 

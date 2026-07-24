@@ -1,7 +1,11 @@
 from typing import Any
 
 import streamlit as st
-from supabase import Client, create_client
+
+try:
+    from supabase import create_client
+except ModuleNotFoundError:
+    create_client = None
 
 
 AUTH_DEFAULTS = {
@@ -19,8 +23,11 @@ def init_auth_state() -> None:
             st.session_state[key] = value
 
 
-def get_supabase_client(authenticated: bool = False) -> Client | None:
+def get_supabase_client(authenticated: bool = False) -> Any | None:
     """Return a Supabase client, optionally with user session attached."""
+    if create_client is None:
+        return None
+
     url = st.secrets.get("SUPABASE_URL")
     key = st.secrets.get("SUPABASE_KEY")
     if not url or not key:
