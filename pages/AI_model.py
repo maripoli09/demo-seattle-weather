@@ -151,9 +151,7 @@ def build_real_vs_pred_df() -> pd.DataFrame:
 
 
 st.markdown("## 4) Comparação: consumo real vs previsão XGBoost")
-st.caption(
-    "Quanto mais próximas estiverem, melhor o desempenho preditivo."
-)
+st.caption("Quanto mais próximas estiverem, melhor o desempenho preditivo.")
 
 real_vs_pred = build_real_vs_pred_df()
 if real_vs_pred.empty:
