@@ -1,4 +1,5 @@
 import importlib
+import re
 from datetime import datetime
 from typing import Any
 
@@ -148,6 +149,14 @@ def signup_error_message(error: Exception) -> str:
     return f"Erro ao criar conta: {error}"
 
 
+def password_meets_complexity(password: str) -> bool:
+    """Require uppercase, number and symbol for signup passwords."""
+    has_uppercase = re.search(r"[A-Z]", password) is not None
+    has_number = re.search(r"[0-9]", password) is not None
+    has_symbol = re.search(r"[^A-Za-z0-9]", password) is not None
+    return has_uppercase and has_number and has_symbol
+
+
 def extract_user_name(user: Any) -> str:
     """Get username from metadata with sensible fallback."""
     metadata = getattr(user, "user_metadata", {}) or {}
@@ -250,6 +259,11 @@ def popup_login() -> None:
                 return
             if len(password) < 6:
                 feedback.error("A palavra-passe deve ter pelo menos 6 caracteres.")
+                return
+            if not password_meets_complexity(password):
+                feedback.error(
+                    "A palavra-passe deve incluir pelo menos 1 letra maiúscula, 1 número e 1 símbolo."
+                )
                 return
 
             try:
@@ -718,14 +732,7 @@ def render_simulator_tab(
     fig_energy.add_vline(x=now.hour, line_dash="dash", line_color="red", annotation_text="Agora")
     st.plotly_chart(fig_energy, use_container_width=True)
 
-    st.subheader("Detalhe meteorologico")
-    if weather:
-        st.write(
-            f"{weather['temperature']:.0f} C | {weather.get('weather_description', 'sem descricao')} | "
-            f"Vento {weather['wind_speed'] * 3.6:.1f} km/h | Nuvens {cloud_coverage}%"
-        )
-    else:
-        st.write("Dados meteorologicos indisponiveis.")
+
 
     return custo_sem_solar, custo_com_solar, poupanca
 
@@ -871,7 +878,12 @@ with current_tab:
     )
     st.subheader(t["rec_title"])
     for advice in advices:
-        st.info(advice)
+        if advice in {t["rec_low_price"], t["rec_high_solar"]}:
+            st.success(advice)
+        elif advice in {t["rec_high_price"], t["rec_partial_solar"], t["rec_clouds"]}:
+            st.warning(advice)
+        else:
+            st.info(advice)
 
     st.subheader(t["hourly_chart"])
     prices = [electricity_price(h, weekday, cycle, price_type) for h in range(24)]

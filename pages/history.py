@@ -5,7 +5,9 @@ from supabase import create_client, Client
 
 st.set_page_config(page_title="Historico de Simulacoes", layout="wide")
 st.title("Historico de Simulacoes")
-st.caption("Compare as simulações guardadas para perceber quais as configurações de painéis solares e tarifário mais vantajosas.")
+st.caption(
+    "Compara cenários guardados e identifica rapidamente as combinações com maior poupança estimada."
+)
 
 def get_supabase_client(authenticated: bool = False) -> Client | None:
     url = st.secrets.get("SUPABASE_URL")
@@ -49,7 +51,7 @@ def fetch_simulations(limit: int = 200, client_id: str | None = None):
         return None, f"Erro ao ler histórico: {e}"
 
 if "user" not in st.session_state or st.session_state.user is None:
-    st.warning("Inicia sessão na página principal para veres o teu histórico.")
+    st.warning("Para consultar o histórico, inicia sessão na página principal.")
     st.stop()
 
 current_user = st.session_state.user
@@ -64,9 +66,10 @@ if error:
 
 
 if not data:
-    st.info("Ainda não existem simulações guardadas. " \
-    "Cria uma simulação no Smart Energy Advisor e carrega em "
-    "**Guardar cenário**.")
+    st.info(
+        "Ainda não tens cenários guardados. Cria uma simulação na página principal e clica em "
+        "**Guardar cenário** para começar a comparar resultados."
+    )
     st.stop()
 
 df = pd.DataFrame(data)
@@ -105,7 +108,7 @@ if "scenario_name" not in df.columns:
 df["scenario_name"] = df["scenario_name"].fillna("Cenário sem nome")
 
 # Filtros
-st.subheader("Filtrar cenários")
+st.subheader("Filtros de comparação")
 
 filter_col_1, filter_col_2, filter_col_3 = st.columns(3)
 
@@ -145,7 +148,7 @@ if selected_price_types:
     df_filtered = df_filtered[df_filtered["price_type"].isin(selected_price_types)]
 
 if df_filtered.empty:
-    st.warning("Não existem cenários com os filtros selecionados.")
+    st.warning("Não há cenários para os filtros selecionados. Ajusta os filtros para veres resultados.")
     st.stop()
 
 # Métricas principais
@@ -185,14 +188,13 @@ metric_3.metric(
 )
 
 st.success(
-    f"**Cenário mais vantajoso:** {best_scenario_name}. "
-    f"Poupança estimada: **{best_savings:.2f} €**."
+    f"Melhor cenário atual: **{best_scenario_name}** | Poupança estimada: **{best_savings:.2f} €**."
 )
 
 st.divider()
 
 # Gráfico 1: custos com e sem solar.
-st.subheader("Comparação de custos por cenário")
+st.subheader("Custo estimado por cenário")
 
 cost_columns = [
     "scenario_name",
@@ -240,7 +242,7 @@ if all(column in df_filtered.columns for column in cost_columns):
 st.divider()
 
 # Gráfico 2: poupança por cenário.
-st.subheader("Poupança estimada por cenário")
+st.subheader("Ranking de poupança estimada")
 
 if "estimated_savings" in df_filtered.columns:
     df_savings = df_filtered.sort_values(
@@ -259,7 +261,7 @@ if "estimated_savings" in df_filtered.columns:
             "estimated_savings": "Poupança estimada (€)",
             "cycle": "Ciclo tarifário",
         },
-        title="Cenários ordenados por poupança estimada",
+        title="Cenários ordenados por maior poupança",
     )
 
     fig_savings.update_traces(
@@ -272,7 +274,7 @@ if "estimated_savings" in df_filtered.columns:
 st.divider()
 
 # Gráfico 3: impacto do número de painéis solares.
-st.subheader("Impacto do número de painéis solares")
+st.subheader("Impacto do número de painéis na poupança")
 
 required_columns = [
     "num_solar_panels",
@@ -296,7 +298,7 @@ if all(column in df_filtered.columns for column in required_columns):
             "estimated_savings": "Poupança estimada (€)",
             "city": "Cidade",
         },
-        title="Relação entre painéis solares e poupança estimada",
+        title="Relação entre número de painéis e poupança estimada",
     )
 
     st.plotly_chart(fig_panels, use_container_width=True)
@@ -304,7 +306,7 @@ if all(column in df_filtered.columns for column in required_columns):
 st.divider()
 
 # Tabela detalhada.
-st.subheader("Detalhe dos cenários")
+st.subheader("Tabela detalhada")
 
 visible_columns = [
     "Data da simulação",
@@ -357,7 +359,7 @@ st.dataframe(
 csv = df_display.to_csv(index=False).encode("utf-8")
 
 st.download_button(
-    label="Descarregar cenários em CSV",
+    label="Descarregar resultados (CSV)",
     data=csv,
     file_name="cenarios_energeticos.csv",
     mime="text/csv",

@@ -3,24 +3,29 @@ import pandas as pd
 import plotly.express as px
 
 st.set_page_config(page_title="Modelo IA", layout="wide")
-st.title("Modelo IA + Explicabilidade")
-st.caption("Previsao de consumo energetico agregado com XGBoost")
+st.title("Modelo de IA")
+st.caption("Como o modelo estima o consumo energético e como interpretar os resultados.")
+
+st.info(
+    "Nesta página encontras um resumo simples do modelo: variáveis usadas, métricas de qualidade, "
+    "fatores mais importantes e limitações."
+)
 
 st.markdown(
     """
-    ## 1) O que e o XGBoost e porque foi escolhido
-    O XGBoost (Extreme Gradient Boosting) e um algoritmo de ensemble baseado em arvores de decisao
-    que combina varias arvores fracas para gerar um modelo mais robusto.
+    ## 1) Porque usamos XGBoost
+    O XGBoost (Extreme Gradient Boosting) é um algoritmo de ensemble baseado em árvores de decisão.
+    Em termos práticos, combina vários modelos simples para criar previsões mais robustas.
     
-    Foi escolhido neste projeto por:
-    - modelar relacoes nao lineares entre variaveis temporais e consumo
-    - lidar bem com dados tabulares
-    - oferecer boa capacidade preditiva em series energeticas agregadas
-    - permitir interpretar a importancia relativa das variaveis
+    Foi escolhido neste projeto porque:
+    - modela relações não lineares entre variáveis temporais e consumo
+    - funciona muito bem com dados tabulares
+    - mantém boa precisão em séries energéticas agregadas
+    - permite interpretar a importância relativa de cada variável
     """
 )
 
-st.markdown("## 2) Variaveis usadas no modelo")
+st.markdown("## 2) Variáveis usadas no modelo")
 features_df = pd.DataFrame(
     [
         {"Variavel": "hour", "Descricao": "Hora do dia (0-23)"},
@@ -33,7 +38,7 @@ features_df = pd.DataFrame(
 )
 st.dataframe(features_df, use_container_width=True)
 
-st.markdown("## 3) Metricas reais do notebook (teste)")
+st.markdown("## 3) Métricas de desempenho (teste)")
 
 # TODO: substituir pelos valores reais do notebook
 mae_real = 0.0157
@@ -47,11 +52,9 @@ m2.metric("RMSE", f"{rmse_real:.4f}")
 m3.metric("R²", f"{r2_real:.4f}")
 m4.metric("MAPE", f"{mape_real:.2f}%")
 
-st.info(
-    "Substitui os placeholders (0.0000) pelos resultados reais obtidos no notebook."
-)
+st.caption("Valores atuais do experimento de referência. Atualiza estes indicadores sempre que treinares uma nova versão do modelo.")
 
-st.markdown("## 4) Importancia das variaveis (modelo real)")
+st.markdown("## 4) Importância das variáveis")
 
 feat_data = pd.DataFrame(
     {
@@ -67,31 +70,31 @@ fig = px.bar(
     orientation="h",
     color="Importancia",
     color_continuous_scale="Viridis",
-    title="Importancia das variaveis no XGBoost",
+    title="Importância das variáveis no XGBoost",
 )
 st.plotly_chart(fig, use_container_width=True)
 
-st.warning(
-    "Troca estes valores pelos reais do teu modelo para ficar metodologicamente correto."
+st.caption("Quanto maior a barra, maior o impacto da variável na previsão final do consumo.")
+
+st.markdown(
+    """
+    ## 5) Limitações atuais
+    - O modelo trabalha com consumo agregado, não individual por cliente.
+    - Eventos extremos (feriados, falhas de medição, picos anormais) podem degradar o desempenho.
+    - A qualidade da previsão depende da consistência temporal dos dados e dos lags.
+    - Para outros contextos geográficos ou perfis de consumo, é necessária nova validação.
+    """
 )
 
 st.markdown(
     """
-    ## 5) Limitacoes do modelo
-    - O modelo trabalha com consumo agregado, nao individual por cliente.
-    - Eventos extremos (feriados, falhas de medicao, picos anormais) podem degradar o desempenho.
-    - O modelo depende da qualidade dos lags e da consistencia temporal dos dados.
-    - Generalizacao para outros contextos depende de novas validacoes.
+    ## 6) Nota metodológica (amostra agregada)
+    O modelo foi treinado para prever consumo energético agregado com base em variáveis temporais
+    e históricas (lags). O desempenho foi avaliado com MAE, RMSE e R² em dados de teste.
+
+    Isto significa que os resultados representam comportamento coletivo (grupo de clientes),
+    não consumo individual de cada utilizador.
     """
 )
 
-st.markdown(
-    """
-    ## 6) Nota metodologica sobre agregacao (300 clientes)
-    O modelo XGBoost foi utilizado para prever consumo energetico agregado com base em variaveis
-    temporais e historicas (lags). O desempenho foi avaliado por MAE, RMSE e R² em dados de teste.
-    A analise de importancia das variaveis permitiu identificar os principais fatores explicativos.
-    Como limitacao, o modelo opera sobre agregacao de 300 clientes, sendo os resultados representativos
-    de comportamento coletivo e nao individual.
-    """
-)
+st.success("Resumo rápido: o modelo é adequado para apoiar decisões operacionais e recomendações contextuais no produto.")

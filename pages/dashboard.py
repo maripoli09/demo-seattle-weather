@@ -8,8 +8,8 @@ import plotly.express as px
 from pathlib import Path
 
 st.set_page_config(page_title="Analise de Dados - 300 Clientes", layout="wide")
-st.title("Analise de Dados dos 300 Clientes")
-st.caption("Amostra: 300 clientes do dataset Ausgrid")
+st.title("Análise de Dados de Consumo")
+st.caption("Amostra agregada de 300 clientes (dataset Ausgrid).")
 
 DATA_PATH = Path("df_gc_clean.pkl")
 
@@ -35,9 +35,13 @@ except Exception as e:
 
 st.markdown(
     """
-    Esta pagina apresenta a exploracao descritiva de uma amostra de 300 clientes do dataset Ausgrid.
-    A analise usa agregacao por timestamp para identificar padroes de consumo por hora, dia da semana e mes.
+    Esta página mostra uma leitura rápida dos padrões de consumo ao longo do tempo.
+    Usa agregação por timestamp para identificar tendências por hora, dia da semana e mês.
     """
+)
+
+st.info(
+    "Usa os filtros para focar períodos e categorias. Os gráficos destacam padrões úteis para apoiar decisões tarifárias e operacionais."
 )
 
 timestamp_candidates = [
@@ -88,7 +92,7 @@ with st.sidebar:
         df = df[mask]
 
 if df.empty:
-    st.warning("Sem dados apos aplicacao dos filtros.")
+    st.warning("Sem dados após aplicação dos filtros. Ajusta os critérios para continuar.")
     st.stop()
 
 # Engenharia temporal
@@ -123,7 +127,7 @@ c3.metric("Desvio padrao", f"{df[cons_col].std():.3f} kWh")
 st.divider()
 
 # 1) Consumo medio por hora
-st.subheader("1) Consumo medio por hora")
+st.subheader("1) Consumo médio por hora")
 by_hour = df.groupby("hora", as_index=False)[cons_col].mean()
 peak_hour = int(by_hour.loc[by_hour[cons_col].idxmax(), "hora"])
 
@@ -143,15 +147,15 @@ with col_chart:
 with col_text:
     st.markdown(
         f"""
-        Agregacao por hora do dia considerando todos os timestamps filtrados.
+        Leitura por hora considerando os dados filtrados.
 
-        Padrao relevante:
-        pico medio por volta das {peak_hour}h, sugerindo concentracao de uso nesse periodo.
+        Insight principal:
+        o pico médio surge por volta das {peak_hour}h, sugerindo concentração de uso nesse período.
         """
     )
 
 # 2) Consumo medio por mes
-st.subheader("2) Consumo medio por mes")
+st.subheader("2) Consumo médio por mês")
 by_month = (
     df.groupby(["mes", "mes_nome"], as_index=False)[cons_col]
     .mean()
@@ -175,15 +179,15 @@ with col_chart:
 with col_text:
     st.markdown(
         f"""
-        Agregacao mensal para observar sazonalidade.
+        Visão mensal para observar sazonalidade.
 
-        Padrao relevante:
-        mes com maior media de consumo: {peak_month}.
+        Insight principal:
+        mês com maior média de consumo: {peak_month}.
         """
     )
 
 # 3) Consumo medio por dia da semana
-st.subheader("3) Consumo medio por dia da semana")
+st.subheader("3) Consumo médio por dia da semana")
 ordem_dias = ["Segunda", "Terca", "Quarta", "Quinta", "Sexta", "Sabado", "Domingo"]
 by_weekday = (
     df.groupby(["dia_semana", "dia_semana_nome"], as_index=False)[cons_col]
@@ -208,15 +212,15 @@ with col_chart:
 with col_text:
     st.markdown(
         f"""
-        Agregacao semanal para comparar comportamento ao longo da semana.
+        Comparação semanal do comportamento de consumo.
 
-        Padrao relevante:
-        maior consumo medio em {top_day}.
+        Insight principal:
+        maior consumo médio em {top_day}.
         """
     )
 
 # 4) Dias uteis vs fins de semana
-st.subheader("4) Comparacao dias uteis vs fins de semana")
+st.subheader("4) Comparação: dias úteis vs fins de semana")
 by_daytype = df.groupby("tipo_dia", as_index=False)[cons_col].mean()
 
 util = by_daytype.loc[by_daytype["tipo_dia"] == "Dia Util", cons_col]
@@ -243,10 +247,10 @@ with col_chart:
 with col_text:
     st.markdown(
         f"""
-        Comparacao direta entre perfil de dias uteis e fins de semana.
+        Comparação direta entre os dois perfis de utilização.
 
-        Padrao relevante:
-        dias uteis estao {abs(diff_pct):.1f}% {"acima" if diff_pct >= 0 else "abaixo"} dos fins de semana.
+        Insight principal:
+        dias úteis estão {abs(diff_pct):.1f}% {"acima" if diff_pct >= 0 else "abaixo"} dos fins de semana.
         """
     )
 
@@ -274,17 +278,17 @@ with col_chart:
 with col_text:
     st.markdown(
         """
-        Cruzamento de duas dimensoes temporais para encontrar picos recorrentes.
+        Cruzamento de duas dimensões temporais para encontrar picos recorrentes.
 
-        Padrao relevante:
-        os blocos mais intensos destacam janelas horarias criticas para gestao de carga.
+        Insight principal:
+        os blocos mais intensos destacam janelas horárias críticas para gestão de carga.
         """
     )
 
 st.divider()
 
 # 7) Heatmap hora x mes
-st.subheader("7) Heatmap: hora x mes")
+st.subheader("6) Heatmap: hora x mês")
 heat_month = (
     df.groupby(["mes_nome", "hora"], as_index=False)[cons_col]
     .mean()
@@ -310,15 +314,15 @@ with col_chart:
 with col_text:
     st.markdown(
         """
-        Mostra sazonalidade intradiaria.
+        Mostra sazonalidade intra-diária ao longo dos meses.
 
-        Padrao relevante:
-        permite identificar horas de pico em cada mes.
+        Insight principal:
+        permite identificar horas de pico em cada mês.
         """
     )
 
 # 8) Outliers por IQR
-st.subheader("8) Outliers por categoria (IQR)")
+st.subheader("7) Outliers por categoria (IQR)")
 
 iqr_rows = []
 if cat_col is not None:
@@ -390,7 +394,7 @@ else:
 
 
 # 9) Boxplot por categoria em escala log
-st.subheader("9) Distribuicao por categoria (escala log)")
+st.subheader("8) Distribuição por categoria (escala log)")
 
 if cat_col is not None:
     dbox = df[df[cat_col].astype(str).isin(["GC", "GG", "CL"])].copy()
@@ -428,10 +432,10 @@ st.divider()
 st.subheader("Conclusoes principais")
 st.markdown(
     f"""
-    - A analise confirma padroes temporais claros no consumo agregado.
-    - O pico horario medio ocorre em torno das {peak_hour}h.
+    - A análise confirma padrões temporais claros no consumo agregado.
+    - O pico horário médio ocorre em torno das {peak_hour}h.
     - O comportamento mensal indica sazonalidade.
-    - A separacao entre dias uteis e fins de semana e relevante para planeamento energetico.
-    - O heatmap facilita identificar periodos de maior carga para apoiar previsao e recomendacao.
+    - A diferença entre dias úteis e fins de semana é relevante para planeamento energético.
+    - Os heatmaps ajudam a identificar janelas críticas para previsão e recomendações contextuais.
     """
 )
