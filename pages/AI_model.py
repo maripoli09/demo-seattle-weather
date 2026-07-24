@@ -100,6 +100,10 @@ def build_real_vs_pred_df() -> pd.DataFrame:
 
 
 st.markdown("## 4) Comparação: consumo real vs previsão XGBoost")
+st.caption(
+    "A linha azul representa o consumo real e a laranja a previsão do modelo. "
+    "Quanto mais próximas estiverem, melhor o desempenho preditivo."
+)
 
 real_vs_pred = build_real_vs_pred_df()
 if real_vs_pred.empty:
@@ -134,6 +138,19 @@ else:
         },
     )
     st.plotly_chart(fig_compare, use_container_width=True)
+
+    mae_window = float(np.mean(np.abs(plot_sample["Consumo real (kWh)"] - plot_sample["Previsao XGBoost (kWh)"])))
+    mean_real = float(np.mean(plot_sample["Consumo real (kWh)"]))
+    mape_window = (mae_window / mean_real * 100) if mean_real > 0 else 0.0
+
+    st.markdown(
+        f"""
+        **Leitura rápida dos resultados:**
+        Nesta janela, a previsão acompanha de forma consistente o padrão do consumo real, com erro médio absoluto de **{mae_window:.4f} kWh**
+        (aproximadamente **{mape_window:.2f}%** do consumo médio observado).
+        """
+    )
+
     if x_axis == "Timestamp":
         st.caption("A visualização mostra, por defeito, os últimos 3 dias do conjunto de teste.")
 
