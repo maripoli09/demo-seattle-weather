@@ -6,12 +6,14 @@ def obtain_local_weather(city="Lisboa"):
     Obtain weather information for a specific city using the OpenWeatherMap API. Obtém informações meteorológicas para uma cidade específica usando a API OpenWeatherMap.
 
     """
-    api_key = st.secrets["OPENWEATHER_API_KEY"]
+    api_key = st.secrets.get("OPENWEATHER_API_KEY")
+    if not api_key:
+        return None
 
-    url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={api_key}&units=metric&lang=pt"
+    url = f"https://api.openweathermap.org/data/2.5/weather?q={city}&appid={api_key}&units=metric&lang=pt"
     
     try:
-        response = requests.get(url)
+        response = requests.get(url, timeout=10)
         # Verefy if the request was successful (status code 200)
         response.raise_for_status()  
 
@@ -35,10 +37,12 @@ def future_weather(city="Lisboa"):
     """
     Obtain weather forecasts for a specific city using the OpenWeatherMap API. Obtém previsões meteorológicas para uma cidade específica usando a API OpenWeatherMap.
     """
-    api_key = st.secrets["OPENWEATHER_API_KEY"]
+    api_key = st.secrets.get("OPENWEATHER_API_KEY")
+    if not api_key:
+        return None
 
     # Note:Some account plans use the /forecast endpoint. 
-    url = f"http://api.openweathermap.org/data/2.5/forecast?q={city}&appid={api_key}&units=metric&lang=pt"
+    url = f"https://api.openweathermap.org/data/2.5/forecast?q={city}&appid={api_key}&units=metric&lang=pt"
     
     try:
         response = requests.get(url, timeout=10)
@@ -48,6 +52,6 @@ def future_weather(city="Lisboa"):
         return response.json()["list"]
     
     except Exception as e:
-        st.error(f"Erro ao obter previsão: {e}")
+        st.warning(f"Erro ao obter previsão: {e}")
         return None
     
